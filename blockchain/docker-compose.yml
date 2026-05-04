@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  tfg_backend:
+    image: node:18-bullseye
+    container_name: tfg_backend_final
+    restart: always
+    working_dir: /app
+    volumes:
+      - /root/tfg_project/blockchain:/app  # Tu código no se borra
+    ports:
+      - "3000:3000"
+    # Instalación automática de herramientas
+    command: >
+      sh -c "npm install cors && 
+             npm install -g pm2 && 
+             pm2-runtime start server.js"
+    networks:
+      - tfg_red_interna
+
+  tfg_frontend:
+    image: nginx:alpine
+    container_name: tfg_frontend_final
+    restart: always
+    ports:
+      - "8888:80"
+    volumes:
+      - /home/julio/tfg_frontend:/usr/share/nginx/html:ro # Tu web no se borra
+    networks:
+      - tfg_red_interna
+
+  tfg_ganache:
+    image: trufflesuite/ganache:latest
+    container_name: tfg_ganache_final
+    restart: always
+    ports:
+      - "8545:8545"
+    networks:
+      - tfg_red_interna
+
+networks:
+  tfg_red_interna:
+    driver: bridge

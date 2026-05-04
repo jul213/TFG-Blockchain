@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificados Blockchain - TFG</title>
+    <!-- Bootstrap para diseño rápido -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- SweetAlert2 para alertas bonitas -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body { background-color: #f8f9fa; padding-top: 50px; }
+        .card { border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .header-title { color: #0d6efd; margin-bottom: 30px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="text-center">
+                <h2 class="header-title">Registro de Notas en Blockchain</h2>
+            </div>
+            
+            <div class="card p-4">
+                <div class="mb-3">
+                    <label for="estudiante" class="form-label">Nombre del Estudiante</label>
+                    <input type="text" class="form-control" id="estudiante" placeholder="Ej. Julio Javier">
+                </div>
+                <div class="mb-3">
+                    <label for="asignatura" class="form-label">Asignatura</label>
+                    <input type="text" class="form-control" id="asignatura" placeholder="Ej. Ciberseguridad">
+                </div>
+                <div class="mb-3">
+                    <label for="nota" class="form-label">Calificación (0-100)</label>
+                    <input type="number" class="form-control" id="nota" placeholder="Ej. 95">
+                </div>
+                <div class="d-grid gap-2">
+                    <button id="btnSubir" onclick="subirNota()" class="btn btn-primary btn-lg">
+                        Sellar en Blockchain
+                    </button>
+                </div>
+            </div>
+
+            <hr class="my-5">
+
+            <div class="text-center">
+                <h4>Verificar Título</h4>
+                <div class="input-group mb-3">
+                    <input type="text" id="hashConsulta" class="form-control" placeholder="Introduce el Hash de la transacción">
+                    <button class="btn btn-outline-secondary" onclick="consultarNota()">Verificar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // URL de tu túnel actual de Cloudflare
+    // IMPORTANTE: Si reinicias el túnel y cambia la URL, actualízala aquí.
+    const API_URL = 'https://faster-accept-celebrities-potato.trycloudflare.com';
+
+    async function subirNota() {
+        const btn = document.getElementById('btnSubir');
+        const payload = {
+            estudiante: document.getElementById('estudiante').value,
+            asignatura: document.getElementById('asignatura').value,
+            nota: document.getElementById('nota').value
+        };
+
+        // Validación básica
+        if (!payload.estudiante || !payload.asignatura || !payload.nota) {
+            return Swal.fire('Atención', 'Por favor, rellene todos los campos', 'warning');
+        }
+
+        // Bloquear botón y mostrar carga
+        btn.disabled = true;
+        btn.innerText = "Procesando en Red...";
+
+        try {
+            const response = await fetch(`${API_URL}/subir-nota`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                Swal.fire({
+                    title: '¡Sello Exitoso!',
+                    html: `<p>La nota ha sido grabada permanentemente.</p>
+                           <small style="word-break: break-all;"><b>Hash:</b> ${data.txHash}</small>`,
+                    icon: 'success'
+                });
+                // Limpiar formulario
+                document.getElementById('estudiante').value = "";
+                document.getElementById('asignatura').value = "";
+                document.getElementById('nota').value = "";
+            } else {
+                Swal.fire('Error', 'Error en el contrato: ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error("Error Fetch:", error);
+            Swal.fire('Error', 'No se pudo conectar con el servidor', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Sellar en Blockchain";
+        }
+    }
+
+    async function consultarNota() {
+        const hash = document.getElementById('hashConsulta').value;
+        if (!hash) return Swal.fire('Error', 'Introduce un hash válido', 'error');
+
+        try {
+            const response = await fetch(`${API_URL}/obtener-nota/${hash}`);
+            const data = await response.json();
+
+            if (data.success) {
+                Swal.fire({
+                    title: 'Certificado Válido',
+                    html: `<div class="text-start">
+                            <p><b>Estudiante:</b> ${data.nota.estudiante}</p>
+                            <p><b>Asignatura:</b> ${data.nota.asignatura}</p>
+                            <p><b>Nota:</b> ${data.nota.calificacion}</p>
+                            <p><b>Fecha:</b> ${data.nota.fecha}</p>
+                           </div>`,
+                    icon: 'info'
+                });
+            } else {
+                Swal.fire('No encontrado', 'No existe ningún registro con ese hash', 'warning');
+            }
+        } catch (error) {
+            Swal.fire('Error', 'Error al consultar el registro', 'error');
+        }
+    }
+</script>
+
+</body>
+</html>

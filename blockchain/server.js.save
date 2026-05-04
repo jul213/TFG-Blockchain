@@ -1,0 +1,209 @@
+const express = require('express');
+const cors = require('cors');
+const { Web3 } = require('web3');
+
+const app = express();
+
+// --- CONFIGURACIÓN DE CORS (Lo que arregla tu error) ---
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'ngrok-skip-browser-warning']
+}));
+
+app.use(express.json());
+
+// Conexión con Ganache (Docker)
+const web3 = new Web3('http://ganache:8545');
+
+// Aquí irían los datos de tu contrato (ABI y Dirección)
+// Asegúrate de que coincidan con los que generaste al desplegar
+const contractABI = [ /* TU ABI AQUÍ */ ];
+const contractAddress = '0x...'; // TU DIRECCIÓN AQUÍ
+
+// RUTA PARA SUBIR NOTA
+app.post('/subir-nota', async (req, res) => {
+    try {
+        const { estudiante, asignatura, nota } = req.body;
+        const accounts = await web3.eth.getAccounts();
+        
+        // Simulación de envío a Blockchain
+        // Aquí es donde llamas a tu contrato: instance.methods.emitirCertificado(...)
+        const txHash = "0x" + Math.random().toString(16).slice(2, 66); // Hash de prueba
+
+        res.json({
+            success: true,
+            txHash: txHash,
+            mensaje: "Nota sellada correctamente"
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// RUTA DE VERIFICACIÓN (Para el QR)
+app.get('/verificar/:hash', async (req, res) => {
+    res.json({ hash: req.params.hash, valido: true, fecha: new Date() });
+});
+
+const PORT = 3000;
+app.listen(PORT, () => {
+    console.log(`Servidor Blockchain corriendo en puerto ${PORT}`);
+});1~const express = require('express');
+const cors = require('cors');
+const { Web3 } = require('web3');
+
+const app = express();
+
+// --- CONFIGURACIÓN DE CORS (Lo que arregla tu error) ---
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'ngrok-skip-browser-warning']
+}));
+
+app.use(express.json());
+
+// Conexión con Ganache (Docker)
+const web3 = new Web3('http://ganache:8545');
+
+// Aquí irían los datos de tu contrato (ABI y Dirección)
+// Asegúrate de que coincidan con los que generaste al desplegar
+const contractABI = [ /* TU ABI AQUÍ */ ];
+const contractAddress = '0x...'; // TU DIRECCIÓN AQUÍ
+
+// RUTA PARA SUBIR NOTA
+app.post('/subir-nota', async (req, res) => {
+    try {
+        const { estudiante, asignatura, nota } = req.body;
+        const accounts = await web3.eth.getAccounts();
+        
+        // Simulación de envío a Blockchain
+        // Aquí es donde llamas a tu contrato: instance.methods.emitirCertificado(...)
+        const txHash = "0x" + Math.random().toString(16).slice(2, 66); // Hash de prueba
+
+        res.json({
+            success: true,
+            txHash: txHash,
+            mensaje: "Nota sellada correctamente"
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// RUTA DE VERIFICACIÓN (Para el QR)
+app.get('/verificar/:hash', async (req, res) => {
+    res.json({ hash: req.params.hash, valido: true, fecha: new Date() });
+});
+
+const PORT = 3000;
+app.listen(PORT, () => {
+    console.log(`Servidor Blockchain corriendo en puerto ${PORT}`);
+});1~const express = require('express');
+const cors = require('cors');
+const { Web3 } = require('web3');
+
+const app = express();
+
+// --- CONFIGURACIÓN DE CORS (Lo que arregla tu error) ---
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'ngrok-skip-browser-warning']
+}));
+
+app.use(express.json());
+
+// Conexión con Ganache (Docker)
+const web3 = new Web3('http://ganache:8545');
+
+// Aquí irían los datos de tu contrato (ABI y Dirección)
+// Asegúrate de que coincidan con los que generaste al desplegar
+const contractABI = [ /* TU ABI AQUÍ */ ];
+const contractAddress = '0x...'; // TU DIRECCIÓN AQUÍ
+
+// RUTA PARA SUBIR NOTA
+app.post('/subir-nota', async (req, res) => {
+    try {
+        const { estudiante, asignatura, nota } = req.body;
+        const accounts = await web3.eth.getAccounts();
+        
+        // Simulación de envío a Blockchain
+        // Aquí es donde llamas a tu contrato: instance.methods.emitirCertificado(...)
+        const txHash = "0x" + Math.random().toString(16).slice(2, 66); // Hash de prueba
+
+        res.json({
+            success: true,
+            txHash: txHash,
+            mensaje: "Nota sellada correctamente"
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// RUTA DE VERIFICACIÓN (Para el QR)
+app.get('/verificar/:hash', async (req, res) => {
+    res.json({ hash: req.params.hash, valido: true, fecha: new Date() });
+});
+
+const PORT = 3000;
+app.listen(PORT, () => {
+    console.log(`Servidor Blockchain corriendo en puerto ${PORT}`);
+});1~const express = require('express');
+const cors = require('cors');
+const { Web3 } = require('web3');
+
+const app = express();
+
+// --- CONFIGURACIÓN DE CORS (Lo que arregla tu error) ---
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'ngrok-skip-browser-warning']
+}));
+
+app.use(express.json());
+
+// Conexión con Ganache (Docker)
+const web3 = new Web3('http://ganache:8545');
+
+// Aquí irían los datos de tu contrato (ABI y Dirección)
+// Asegúrate de que coincidan con los que generaste al desplegar
+const contractABI = [ /* TU ABI AQUÍ */ ];
+const contractAddress = '0x...'; // TU DIRECCIÓN AQUÍ
+
+// RUTA PARA SUBIR NOTA
+app.post('/subir-nota', async (req, res) => {
+    try {
+        const { estudiante, asignatura, nota } = req.body;
+        const accounts = await web3.eth.getAccounts();
+        
+        // Simulación de envío a Blockchain
+        // Aquí es donde llamas a tu contrato: instance.methods.emitirCertificado(...)
+        const txHash = "0x" + Math.random().toString(16).slice(2, 66); // Hash de prueba
+
+        res.json({
+            success: true,
+            txHash: txHash,
+            mensaje: "Nota sellada correctamente"
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// RUTA DE VERIFICACIÓN (Para el QR)
+app.get('/verificar/:hash', async (req, res) => {
+    res.json({ hash: req.params.hash, valido: true, fecha: new Date() });
+});
+
+const PORT = 3000;
+app.listen(PORT, () => {
+    console.log(`Servidor Blockchain corriendo en puerto ${PORT}`);
+});

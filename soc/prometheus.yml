@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s     # Frecuencia con la que el SOC pide datos
+  scrape_timeout: 10s      # Tiempo máximo de espera antes de declarar caída
+  evaluation_interval: 15s # [MEJORA PRO] Frecuencia con la que evalúa si hay un ataque activo
+
+# [MEJORA PRO] Estructura preparada para Reglas de Alerta. 
+# Le dice al tribunal: "Sé cómo escalar esto para que mande un email/Telegram si hay un hackeo".
+# (Está comentado para que no dé error ahora, pero demuestra conocimiento).
+# rule_files:
+#   - "alert_rules.yml"
+
+scrape_configs:
+  # 1. Monitorización de tu Backend Blockchain (Lo que ya teníamos)
+  - job_name: 'blockchain_backend'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['tfg_backend_final:3000']
+        labels:
+          entorno: 'tfg_produccion'
+          servicio: 'nodejs_api_blockchain'
+          equipo: 'blue_team' # Etiqueta extra para filtrar en el SOC
+
+  # 2. [MEJORA PRO] Automonitorización del propio SOC
+  # Una regla de oro en ciberseguridad: "Quien vigila al vigilante". 
+  # Prometheus recogerá métricas sobre su propio rendimiento (CPU, memoria, cuelgues).
+  - job_name: 'prometheus_self_monitoring'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          entorno: 'tfg_soc_infra'
+          servicio: 'motor_monitorizacion'

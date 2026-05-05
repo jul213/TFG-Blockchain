@@ -7693,10 +7693,16 @@
       "links": {},
       "address": "0x8b76a15D224Cf07A1Fc20354A97E2f103DbF6514",
       "transactionHash": "0xe096924052089e50d755b34503d2ff0a6a58d87db33d0d91a3a077090aee8e0a"
+    },
+    "1777954518555": {
+      "events": {},
+      "links": {},
+      "address": "0x256fd0d92aA31447a3c32D274E43D2ddE01ebF7D",
+      "transactionHash": "0x5076ad5329a114b33066fb72c3657c94e43b1081461588acebf3e9883dbb5aae"
     }
   },
   "schemaVersion": "3.4.16",
-  "updatedAt": "2026-05-03T18:25:30.830Z",
+  "updatedAt": "2026-05-05T04:38:48.315Z",
   "networkType": "ethereum",
   "devdoc": {
     "details": "Contrato para el registro y verificación de calificaciones académicas en Blockchain (TFG)",

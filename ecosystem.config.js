@@ -3,7 +3,7 @@ module.exports = {
     {
       name: "ganache-blockchain",
       script: "ganache",
-      args: "--host 0.0.0.0 --port 8545"
+      args: "--host 0.0.0.0 --port 8545 --db /root/tfg_project/ganache_db"
     },
     {
       name: "backend-tfg",

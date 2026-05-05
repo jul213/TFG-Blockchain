@@ -2,7 +2,7 @@ module.exports = {
   networks: {
     development: {
       host: "192.168.1.157",     // Tu IP local
-      port: 8546,            // EL NUEVO PUERTO QUE NO ESTÁ BLOQUEADO
+      port: 8545,            // EL NUEVO PUERTO QUE NO ESTÁ BLOQUEADO
       network_id: "*",       // Match any network id
       gas: 6721975,
       gasPrice: 20000000000,

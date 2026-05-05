@@ -7,12 +7,11 @@ services:
     restart: always
     working_dir: /app
     volumes:
-      - /root/tfg_project/blockchain:/app  # Tu código no se borra
+      - /root/tfg_project/blockchain:/app
     ports:
       - "3000:3000"
-    # Instalación automática de herramientas
     command: >
-      sh -c "npm install cors && 
+      sh -c "npm install prom-client cors && 
              npm install -g pm2 && 
              pm2-runtime start server.js"
     networks:
@@ -25,7 +24,7 @@ services:
     ports:
       - "8888:80"
     volumes:
-      - /home/julio/tfg_frontend:/usr/share/nginx/html:ro # Tu web no se borra
+      - /home/julio/tfg_frontend:/usr/share/nginx/html:ro
     networks:
       - tfg_red_interna
 
@@ -33,11 +32,43 @@ services:
     image: trufflesuite/ganache:latest
     container_name: tfg_ganache_final
     restart: always
+    command: ["ganache", "--host", "0.0.0.0", "--db", "/app/ganache_db"] # Persistencia interna
+    volumes:
+      - /root/tfg_project/ganache_db:/app/ganache_db # Mapeo al disco real
     ports:
       - "8545:8545"
+    networks:
+      - tfg_red_interna
+
+  # --- MEJORAS DEL SOC (Monitorización) ---
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: tfg_prometheus
+    restart: always
+    volumes:
+      - /root/tfg_project/soc/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus # Volumen persistente para gráficas
+    networks:
+      - tfg_red_interna
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: tfg_grafana
+    restart: always
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana_data:/var/lib/grafana # Volumen persistente para Dashboards
     networks:
       - tfg_red_interna
 
 networks:
   tfg_red_interna:
     driver: bridge
+
+# Definición de volúmenes para que Docker gestione el espacio en disco
+volumes:
+  prometheus_data:
+  grafana_data:

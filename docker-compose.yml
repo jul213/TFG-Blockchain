@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  tfg_backend:
+    image: node:18-bullseye
+    container_name: tfg_backend_final
+    restart: always
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    working_dir: /app
+    volumes:
+      - /root/tfg_project/blockchain:/app
+    ports:
+      - "3000:3000"
+    command: >
+      sh -c "npm install prom-client cors && 
+             npm install -g pm2 && 
+             pm2-runtime start server.js"
+    networks:
+      - tfg_red_interna
+
+  tfg_frontend:
+    image: nginx:alpine
+    container_name: tfg_frontend_final
+    restart: always
+    ports:
+      - "8888:80"
+    volumes:
+      - /home/julio/tfg_frontend:/usr/share/nginx/html:ro
+    networks:
+      - tfg_red_interna
+
+  tfg_ganache:
+    image: trufflesuite/ganache:latest
+    container_name: tfg_ganache_final
+    restart: always
+    command: ["ganache", "--host", "0.0.0.0", "--db", "/app/ganache_db"]
+    volumes:
+      - /root/tfg_project/ganache_db:/app/ganache_db
+    ports:
+      - "8545:8545"
+    networks:
+      - tfg_red_interna
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: tfg_prometheus
+    restart: always
+    volumes:
+      - /root/tfg_project/soc/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - tfg_red_interna
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: tfg_grafana
+    restart: always
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - tfg_red_interna
+
+networks:
+  tfg_red_interna:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:

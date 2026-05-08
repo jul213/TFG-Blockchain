@@ -2,13 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const Web3 = require('web3');
 const path = require('path');
-const client = require('prom-client'); // Librería para métricas del SOC
-const app = express();
+const fs = require('fs');
+const client = require('prom-client'); 
 
+const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- CONFIGURACIÓN DE MÉTRICAS (Para tu Grafana) ---
+// --- 1. CONFIGURACIÓN DE MÉTRICAS (SOC PRO NIVEL TFG) ---
 const register = new client.Registry();
 client.collectDefaultMetrics({ register });
 
@@ -16,17 +17,23 @@ const notasCounter = new client.Counter({
     name: 'tfg_notas_registradas_total',
     help: 'Total de notas selladas en la Blockchain'
 });
+
 const alertsCounter = new client.Counter({
-    name: 'tfg_alertas_seguridad_total',
-    help: 'Total de intentos de acceso no autorizados'
+    name: 'tfg_alertas_security_total',
+    help: 'Total de incidentes detectados con metadatos de seguridad',
+    labelNames: ['tipo', 'severidad', 'cvss', 'mitre_tactic']
 });
+
 register.registerMetric(notasCounter);
 register.registerMetric(alertsCounter);
 
-// --- CONFIGURACIÓN DE RED Y CARGA AUTOMÁTICA ---
-const web3 = new Web3('http://127.0.0.1:8545');
+// --- 2. CONFIGURACIÓN DE RED (DOCKER INTERNAL DNS) ---
+const web3 = new Web3('http://tfg_ganache_final:8545');
 
-const cargarContrato = (nombreJson) => {
+// --- 3. CARGA DE CONTRATOS ---
+
+// Función para tus contratos de Truffle (Notas y SecurityManager)
+const cargarContratoTruffle = (nombreJson) => {
     try {
         const artifact = require(`./build/contracts/${nombreJson}.json`);
         const networkId = Object.keys(artifact.networks).pop();
@@ -34,63 +41,97 @@ const cargarContrato = (nombreJson) => {
         console.log(`[OK] ${nombreJson} activo en: ${address}`);
         return new web3.eth.Contract(artifact.abi, address);
     } catch (error) {
-        console.error(`[CRÍTICO] Error al cargar ${nombreJson}`);
+        console.error(`[CRÍTICO] Error al cargar ${nombreJson}:`, error.message);
         return null;
     }
 };
 
-const contract = cargarContrato('Notas');
-const securityContract = cargarContrato('SecurityManager');
+const contract = cargarContratoTruffle('Notas');
+const securityContract = cargarContratoTruffle('SecurityManager');
 
-// --- ESCUCHA DE EVENTOS DE SEGURIDAD (Blue Team) ---
-// Esto detecta ataques en la Blockchain aunque no pasen por el servidor
-if (securityContract) {
-    securityContract.events.SecurityAlert({ fromBlock: 'latest' })
-    .on('data', event => {
-        const { intruder, detail, severity } = event.returnValues;
-        console.log(`\n🚨 [ALERTA SOC] Intruso detectado: ${intruder}`);
-        console.log(`📌 Detalle: ${detail} | Severidad: ${severity}\n`);
-        alertsCounter.inc(); // Aumenta la métrica en Grafana
-    });
+// Carga del Escudo V2 (Auditoría Forense Inmutable)
+let cyberShield = null;
+try {
+    // CORRECCIÓN DE RUTA: './contract_info.json' porque el working_dir de Docker es /app/blockchain
+    const shieldPath = path.join(__dirname, 'contract_info.json');
+    if (fs.existsSync(shieldPath)) {
+        const shieldData = JSON.parse(fs.readFileSync(shieldPath, 'utf8'));
+        cyberShield = new web3.eth.Contract(shieldData.abi, shieldData.address);
+        console.log(`[🛡️ SHIELD] Auditoría V2 cargada en: ${shieldData.address}`);
+    } else {
+        console.error("[⚠️ SHIELD] Archivo contract_info.json no encontrado en la raíz.");
+    }
+} catch (e) {
+    console.error("[⚠️ SHIELD] Error al inicializar Auditoría V2:", e.message);
 }
 
-// --- SERVIR FRONTEND ---
+// --- 4. FUNCIÓN MAESTRA DE AUDITORÍA (Doble Registro) ---
+async function registrarIncidente(severityNum, category, details, severityName, cvss, mitre) {
+    // A. Prometheus (Para gráficas SOC en Grafana)
+    alertsCounter.inc({
+        tipo: category,
+        severidad: severityName,
+        cvss: cvss,
+        mitre_tactic: mitre
+    });
+
+    // B. Blockchain (Para prueba legal/forense inmutable)
+    if (cyberShield) {
+        try {
+            const accounts = await web3.eth.getAccounts();
+            await cyberShield.methods.reportIncident(severityNum, category, details)
+                .send({ from: accounts[0], gas: 500000 });
+            console.log(`[🛡️ BC-LOG] Evento '${category}' sellado en Blockchain.`);
+        } catch (err) {
+            console.error("❌ Error firmando en Blockchain:", err.message);
+        }
+    }
+}
+
+// --- 5. RUTAS ---
+
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// --- RUTA GRABAR NOTA (Con Check de Seguridad RBAC) ---
+// RUTA: Subir Nota (Con Auditoría Forense)
 app.post('/subir-nota', async (req, res) => {
     try {
         const { estudiante, asignatura, nota } = req.body;
         const accounts = await web3.eth.getAccounts();
         const emisor = accounts[0];
 
-        // 🛡️ PASO DE SEGURIDAD: ¿Es un profesor autorizado?
+        // 🛡️ RBAC Check con SecurityManager
         if (securityContract) {
             const esProfe = await securityContract.methods.checkAccess(emisor, web3.utils.keccak256("ROLE_PROFESOR")).call();
             if (!esProfe) {
-                alertsCounter.inc();
-                console.error(`🛑 Bloqueado: ${emisor} intentó subir nota sin permiso.`);
+                // REGISTRO DE INCIDENTE EN SOC Y BLOCKCHAIN
+                await registrarIncidente(
+                    3, // HIGH severity
+                    'UNAUTHORIZED_ACCESS_ATTEMPT',
+                    `Usuario ${emisor} intentó subir nota sin permisos.`,
+                    'HIGH', '7.5', 'T1078.001'
+                );
+
                 return res.status(403).json({ success: false, error: "Acceso denegado: No tienes el Rol de Profesor" });
             }
         }
 
         const receipt = await contract.methods.emitirCertificado(
-            estudiante, 
-            asignatura, 
+            estudiante,
+            asignatura,
             parseInt(nota)
         ).send({ from: emisor, gas: 3000000 });
 
-        notasCounter.inc(); // Actualiza métrica para el SOC
-        console.log(`✅ Nota subida por ${emisor}. TX: ${receipt.transactionHash}`);
+        notasCounter.inc(); 
+        console.log(`✅ Nota registrada. TX: ${receipt.transactionHash}`);
         res.json({ success: true, txHash: receipt.transactionHash });
 
     } catch (error) {
-        console.error("❌ Error en el proceso:", error.message);
+        console.error("❌ Error en ruta /subir-nota:", error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// --- RUTA CONSULTAR NOTA (Mantiene tu lógica) ---
+// RUTA: Obtener Nota
 app.get('/obtener-nota/:hash', async (req, res) => {
     try {
         const { hash } = req.params;
@@ -108,43 +149,35 @@ app.get('/obtener-nota/:hash', async (req, res) => {
                 }
             });
         }
-
-        const tx = await web3.eth.getTransaction(hash);
-        if (tx) {
-            return res.json({
-                success: true,
-                nota: {
-                    estudiante: "Certificado Registrado",
-                    asignatura: "Bloque: " + tx.blockNumber,
-                    calificacion: "Hash Válido",
-                    fecha: "Verificado en Ledger"
-                }
-            });
-        }
-        res.status(404).json({ success: false, message: "No encontrado" });
+        res.status(404).json({ success: false, message: "Hash no encontrado" });
     } catch (error) {
         res.status(500).json({ success: false });
     }
 });
 
-// --- ENDPOINT PARA PROMETHEUS/GRAFANA ---
+// RUTA: Métricas para Grafana
 app.get('/metrics', async (req, res) => {
     res.set('Content-Type', register.contentType);
     res.end(await register.metrics());
 });
 
+// RUTA: Salud del Sistema
 app.get('/health-check', (req, res) => {
     res.json({
         status: "online",
-        blockchain: "Ganache",
-        notas_contract: contract?.options.address,
-        security_contract: securityContract?.options.address
+        blockchain_connected: true,
+        contracts: {
+            notas: contract?.options.address,
+            security: securityContract?.options.address,
+            audit_shield_v2: cyberShield?.options.address
+        }
     });
 });
 
+// --- 6. ARRANQUE ---
 app.listen(3000, '0.0.0.0', () => {
     console.log("==================================================");
-    console.log("  SISTEMA TFG: NOTAS + SEGURIDAD + SOC ACTIVO     ");
-    console.log("  Monitorización en: http://localhost:3000/metrics ");
+    console.log("  SISTEMA TFG: NOTAS + SEGURIDAD + SOC + AUDIT V2 ");
+    console.log("  API: http://localhost:3000                      ");
     console.log("==================================================");
 });

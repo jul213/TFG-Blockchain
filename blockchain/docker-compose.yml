@@ -1,74 +1,70 @@
 version: '3.8'
 
 services:
-  tfg_backend:
-    image: node:18-bullseye
-    container_name: tfg_backend_final
-    restart: always
-    working_dir: /app
-    volumes:
-      - /root/tfg_project/blockchain:/app
-    ports:
-      - "3000:3000"
-    command: >
-      sh -c "npm install prom-client cors && 
-             npm install -g pm2 && 
-             pm2-runtime start server.js"
-    networks:
-      - tfg_red_interna
-
-  tfg_frontend:
-    image: nginx:alpine
-    container_name: tfg_frontend_final
-    restart: always
-    ports:
-      - "8888:80"
-    volumes:
-      - /home/julio/tfg_frontend:/usr/share/nginx/html:ro
-    networks:
-      - tfg_red_interna
-
-  tfg_ganache:
-    image: trufflesuite/ganache:latest
+  # --- 1. BLOCKCHAIN (GANACHE) ---
+  tfg_ganache_final:
+    image: trufflesuite/ganache-cli:latest
     container_name: tfg_ganache_final
-    restart: always
-    command: ["ganache", "--host", "0.0.0.0", "--db", "/app/ganache_db"] # Persistencia interna
-    volumes:
-      - /root/tfg_project/ganache_db:/app/ganache_db # Mapeo al disco real
+    command: ["ganache-cli", "-h", "0.0.0.0", "-p", "8545", "--networkId", "1778274970178"]
     ports:
       - "8545:8545"
     networks:
-      - tfg_red_interna
+      - tfg_red_segura
 
-  # --- MEJORAS DEL SOC (Monitorización) ---
-  prometheus:
+  # --- 2. BACKEND (NODE.JS + AUDITORÍA V2) ---
+  tfg_backend_final:
+    image: node:18-bullseye
+    container_name: tfg_backend_final
+    working_dir: /app/blockchain
+    volumes:
+      - ./blockchain:/app/blockchain
+    # El comando ahora ejecuta el script de inicialización que creamos
+    command: ./init-blockchain.sh
+    ports:
+      - "3000:3000"
+    depends_on:
+      - tfg_ganache_final
+    environment:
+      - NODE_ENV=development
+    restart: always
+    networks:
+      - tfg_red_segura
+
+  # --- 3. FRONTEND (NGINX / WEB) ---
+  tfg_frontend_final:
+    image: nginx:alpine
+    container_name: tfg_frontend_final
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    ports:
+      - "80:80"
+    depends_on:
+      - tfg_backend_final
+    networks:
+      - tfg_red_segura
+
+  # --- 4. MONITORIZACIÓN SOC (PROMETHEUS) ---
+  tfg_prometheus:
     image: prom/prometheus:latest
     container_name: tfg_prometheus
-    restart: always
     volumes:
-      - /root/tfg_project/soc/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus # Volumen persistente para gráficas
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
     networks:
-      - tfg_red_interna
+      - tfg_red_segura
 
-  grafana:
+  # --- 5. VISUALIZACIÓN SOC (GRAFANA) ---
+  tfg_grafana:
     image: grafana/grafana:latest
     container_name: tfg_grafana
-    restart: always
     ports:
       - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin123
-    volumes:
-      - grafana_data:/var/lib/grafana # Volumen persistente para Dashboards
+    depends_on:
+      - tfg_prometheus
     networks:
-      - tfg_red_interna
+      - tfg_red_segura
 
 networks:
-  tfg_red_interna:
+  tfg_red_segura:
     driver: bridge
-
-# Definición de volúmenes para que Docker gestione el espacio en disco
-volumes:
-  prometheus_data:
-  grafana_data:

@@ -1,75 +1,81 @@
-version: '3.8'
-
 services:
-  tfg_backend:
-    image: node:18-bullseye
-    container_name: tfg_backend_final
-    restart: always
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
-    working_dir: /app
-    volumes:
-      - /root/tfg_project/blockchain:/app
-    ports:
-      - "3000:3000"
-    command: >
-      sh -c "npm install prom-client cors && 
-             npm install -g pm2 && 
-             pm2-runtime start server.js"
-    networks:
-      - tfg_red_interna
-
-  tfg_frontend:
-    image: nginx:alpine
-    container_name: tfg_frontend_final
-    restart: always
-    ports:
-      - "8888:80"
-    volumes:
-      - /home/julio/tfg_frontend:/usr/share/nginx/html:ro
-    networks:
-      - tfg_red_interna
-
-  tfg_ganache:
-    image: trufflesuite/ganache:latest
+  tfg_ganache_final:
+    image: trufflesuite/ganache-cli:latest
     container_name: tfg_ganache_final
     restart: always
-    command: ["ganache", "--host", "0.0.0.0", "--db", "/app/ganache_db"]
+    command: ["--db=/app/database", "--mnemonic=tfg_blockchain_secret_seed_phrase", "--networkId=1778279372631", "--host=0.0.0.0"]
     volumes:
-      - /root/tfg_project/ganache_db:/app/ganache_db
+      - ./ganache_data:/app/database
+    networks:
+      - tfg_internal_nw
     ports:
       - "8545:8545"
-    networks:
-      - tfg_red_interna
 
-  prometheus:
-    image: prom/prometheus:latest
+  tfg_backend_final:
+    image: node:18-alpine
+    container_name: tfg_backend_final
+    restart: always
+    working_dir: /app/blockchain
+    volumes:
+      - .:/app
+    depends_on:
+      - tfg_ganache_final
+    networks:
+      - tfg_internal_nw
+    command: sh -c "npm install && node server.js"
+
+  tfg_frontend_final:
+    image: nginx:stable-alpine
+    container_name: tfg_frontend_final
+    restart: always
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    networks:
+      - tfg_internal_nw
+
+  tfg_cloudflare_tunnel_api:
+    image: cloudflare/cloudflared:latest
+    container_name: tfg_cloudflare_tunnel_api
+    restart: always
+    command: tunnel --url http://tfg_backend_final:3000
+    networks:
+      - tfg_internal_nw
+
+  tfg_cloudflare_tunnel_web:
+    image: cloudflare/cloudflared:latest
+    container_name: tfg_cloudflare_tunnel_web
+    restart: always
+    command: tunnel --url http://tfg_frontend_final:80
+    networks:
+      - tfg_internal_nw
+
+  tfg_cloudflare_tunnel_grafana:
+    image: cloudflare/cloudflared:latest
+    container_name: tfg_cloudflare_tunnel_grafana
+    restart: always
+    command: tunnel --url http://tfg_grafana:3000
+    networks:
+      - tfg_internal_nw
+
+  tfg_prometheus:
+    image: prom/prometheus
     container_name: tfg_prometheus
     restart: always
     volumes:
-      - /root/tfg_project/soc/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
+      - ./prometheus_data:/prometheus
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
     networks:
-      - tfg_red_interna
+      - tfg_internal_nw
 
-  grafana:
-    image: grafana/grafana:latest
+  tfg_grafana:
+    image: grafana/grafana
     container_name: tfg_grafana
     restart: always
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin123
     volumes:
-      - grafana_data:/var/lib/grafana
+      - ./grafana_data:/var/lib/grafana
     networks:
-      - tfg_red_interna
+      - tfg_internal_nw
 
 networks:
-  tfg_red_interna:
+  tfg_internal_nw:
     driver: bridge
-
-volumes:
-  prometheus_data:
-  grafana_data:

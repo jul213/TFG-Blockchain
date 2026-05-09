@@ -1,2 +1,8 @@
 node_modules/
 .env
+grafana_data/
+ganache_data/
+ganache_db/
+prometheus_data/
+node_modules/
+*.log

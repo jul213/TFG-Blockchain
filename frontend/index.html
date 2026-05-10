@@ -21,7 +21,6 @@
 </head>
 <body class="bg-[#f8fafc] text-slate-900">
 
-    <!-- Login -->
     <div id="login-screen" class="min-h-screen flex items-center justify-center bg-[#0f172a] px-4">
         <div class="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md animate-fade-in">
             <div class="flex justify-center mb-8">
@@ -43,9 +42,7 @@
         </div>
     </div>
 
-    <!-- Dashboard -->
     <div id="dashboard" class="hidden min-h-screen flex flex-col md:flex-row">
-        <!-- Sidebar Premium -->
         <aside class="w-full md:w-72 bg-[#0f172a] text-white flex flex-col shrink-0 shadow-2xl z-20">
             <div class="p-8 border-b border-slate-800 flex items-center gap-4">
                 <div class="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-900/20"><i data-lucide="shield-check" class="w-6 h-6"></i></div>
@@ -66,7 +63,6 @@
             </div>
         </aside>
 
-        <!-- Main Content Area -->
         <main class="flex-1 flex flex-col overflow-hidden">
             <header class="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 px-10 flex items-center justify-between sticky top-0 z-10">
                 <div class="flex items-center gap-3">
@@ -82,12 +78,11 @@
                     </button>
                 </div>
             </header>
-            
+
             <div id="content-area" class="p-10 overflow-y-auto flex-1"></div>
         </main>
     </div>
 
-    <!-- Modal QR (Diseño Mejorado) -->
     <div id="qr-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4 transition-all">
         <div class="bg-white p-10 rounded-[2.5rem] max-w-sm w-full text-center shadow-[0_20px_50px_rgba(0,0,0,0.3)] animate-fade-in border border-white/20">
             <h3 class="font-bold text-2xl text-slate-800 mb-2">Acceso Móvil</h3>
@@ -128,6 +123,8 @@
 
             if(page === 'Subir Notas') {
                 renderSubirNotas();
+            } else if(page === 'Consultar Notas') {
+                renderConsultarNotas();
             } else {
                 try {
                     const res = await fetch(`${API_URL}/api/my-students`, {headers: {'Authorization': `Bearer ${token}`}});
@@ -192,6 +189,59 @@
             lucide.createIcons();
         }
 
+        async function renderConsultarNotas() {
+            const area = document.getElementById('content-area');
+            try {
+                const res = await fetch(`${API_URL}/api/consultar-notas`, {
+                    headers: {'Authorization': `Bearer ${localStorage.getItem('tfg_token')}`}
+                });
+                const data = await res.json();
+                if(!data.success) throw new Error();
+
+                let html = `
+                <div class="animate-fade-in space-y-6">
+                    <div class="glass-card p-8 rounded-[2rem] overflow-hidden shadow-sm">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                    <th class="pb-5 pl-4">Estudiante</th>
+                                    <th class="pb-5">Asignatura</th>
+                                    <th class="pb-5">Nota</th>
+                                    <th class="pb-5 text-center">Certificado Blockchain</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-50">`;
+
+                data.notas.forEach(nota => {
+                    html += `
+                    <tr class="hover:bg-slate-50/50 transition-colors group">
+                        <td class="py-5 pl-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 text-xs font-bold">${nota.student_email[0].toUpperCase()}</div>
+                                <span class="font-semibold text-slate-700">${nota.student_email}</span>
+                            </div>
+                        </td>
+                        <td class="py-5 text-slate-600 font-medium">${nota.subject}</td>
+                        <td class="py-5"><span class="bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-bold">${nota.grade}</span></td>
+                        <td class="py-5">
+                            <div class="flex items-center justify-center gap-2">
+                                <i data-lucide="link" class="w-3 h-3 text-emerald-500"></i>
+                                <span class="text-[10px] font-mono text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 max-w-[140px] truncate" title="${nota.blockchain_hash}">
+                                    ${nota.blockchain_hash}
+                                </span>
+                            </div>
+                        </td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table></div></div>`;
+                area.innerHTML = html;
+            } catch(e) {
+                area.innerHTML = '<div class="p-8 bg-red-50 text-red-600 rounded-2xl font-bold border border-red-100 flex items-center gap-3"><i data-lucide="alert-circle"></i> Error al recuperar registros de la base de datos</div>';
+            }
+            lucide.createIcons();
+        }
+
         async function firmarNota() {
             const resDiv = document.getElementById('res');
             resDiv.innerHTML = '<div class="flex items-center justify-center gap-2 text-indigo-600 font-bold"><i data-lucide="refresh-cw" class="w-5 h-5 animate-spin"></i> Minando bloque...</div>';
@@ -234,8 +284,8 @@
             document.getElementById('user-display-name').innerText = currentUser.name;
             document.getElementById('user-initials').innerText = currentUser.name.split(' ').map(n=>n[0]).join('');
             const menu = document.getElementById('sidebar-menu');
-            const icons = {'Pasar Asistencia': 'check-square', 'Subir Notas': 'database', 'Mis Cursos': 'book-open'};
-            ['Pasar Asistencia', 'Subir Notas', 'Mis Cursos'].forEach(i => {
+            const icons = {'Pasar Asistencia': 'check-square', 'Subir Notas': 'database', 'Mis Cursos': 'book-open', 'Consultar Notas': 'clipboard-list'};
+            ['Pasar Asistencia', 'Subir Notas', 'Consultar Notas', 'Mis Cursos'].forEach(i => {
                 menu.innerHTML += `
                 <button onclick="loadContent('${i}')" class="w-full text-left p-4 rounded-2xl sidebar-item flex items-center gap-4 text-slate-400 hover:text-white transition group">
                     <div class="p-2 rounded-lg bg-slate-800/50 group-hover:bg-blue-600 transition-colors"><i data-lucide="${icons[i]}" class="w-5 h-5"></i></div>

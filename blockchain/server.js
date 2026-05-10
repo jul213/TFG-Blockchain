@@ -133,21 +133,48 @@ app.get('/api/my-students', verifyToken, checkRole(['TEACHER']), async (req, res
     }
 });
 
-// RUTA CORREGIDA: /api/subir-nota
+// --- RUTA ACTUALIZADA: SUBIR NOTA (BLOCKCHAIN + DATABASE) ---
 app.post('/api/subir-nota', verifyToken, checkRole(['TEACHER', 'RECTOR']), async (req, res) => {
     try {
         const { estudiante, asignatura, nota } = req.body;
         const accounts = await web3.eth.getAccounts();
-        
+
         if (!contract) throw new Error("Contrato Notas no desplegado");
 
+        // 1. Sellar en Blockchain
         const receipt = await contract.methods.emitirCertificado(estudiante, asignatura, parseInt(nota))
             .send({ from: accounts[0], gas: 3000000 });
 
+        const txHash = receipt.transactionHash;
+
+        // 2. Guardar en PostgreSQL (ERP local)
+        const queryDB = `
+            INSERT INTO grades (student_email, subject, grade, blockchain_hash)
+            VALUES ($1, $2, $3, $4)
+        `;
+        await pool.query(queryDB, [estudiante, asignatura, nota, txHash]);
+
         notasCounter.inc();
-        res.json({ success: true, txHash: receipt.transactionHash });
+        res.json({ success: true, txHash: txHash });
     } catch (error) {
+        console.error("Error en subir-nota:", error);
         res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// --- NUEVA RUTA: CONSULTAR NOTAS (HISTÓRICO) ---
+app.get('/api/consultar-notas', verifyToken, checkRole(['TEACHER', 'RECTOR']), async (req, res) => {
+    try {
+        const query = `
+            SELECT student_email, subject, grade, blockchain_hash, timestamp 
+            FROM grades 
+            ORDER BY timestamp DESC
+        `;
+        const result = await pool.query(query);
+        res.json({ success: true, notas: result.rows });
+    } catch (err) {
+        console.error("Error en consultar-notas:", err);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

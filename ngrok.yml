@@ -1,0 +1,13 @@
+version: "2"
+authtoken: 3DWbNQMeyXj0YbEtLHvJ3fwOIAI_4YP3g8YAE9V9ZifPPn5yU
+tunnels:
+  api:
+    addr: 3000
+    proto: http
+    hostname: reprogram-boat-slacked-v2.ngrok-free.dev
+  web:
+    addr: 8080
+    proto: http
+  grafana:
+    addr: 3001
+    proto: http

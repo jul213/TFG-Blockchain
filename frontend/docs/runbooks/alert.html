@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TFG Runbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+  <main class="max-w-4xl mx-auto px-6 py-16 space-y-6">
+    <div class="rounded-3xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl">
+      <p class="text-xs uppercase tracking-[0.3em] text-blue-400 font-bold">Runbook SOC</p>
+      <h1 id="title" class="text-3xl font-bold mt-3">Incidente</h1>
+      <p id="summary" class="text-slate-300 mt-3 leading-7">Guía rápida para responder al alerta.</p>
+      <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <a href="https://localhost/" class="rounded-2xl bg-blue-600 px-5 py-4 font-bold text-center">Ir a la SPA</a>
+        <a href="http://localhost:3002/d/tfg-soc/tfg-soc" class="rounded-2xl bg-slate-800 px-5 py-4 font-bold text-center">Abrir Grafana</a>
+      </div>
+      <div class="mt-8 rounded-2xl bg-slate-950/80 p-5 border border-slate-800">
+        <p class="text-sm text-slate-300">Pasos:</p>
+        <ol id="steps" class="list-decimal pl-6 mt-3 space-y-2 text-slate-200"></ol>
+      </div>
+    </div>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const runbook = params.get('runbook') || 'general';
+    const map = {
+      'backend-down': {
+        title: 'Backend caído',
+        summary: 'Verifica contenedor, healthcheck y logs del backend. Correlaciona con PostgreSQL y Ganache.',
+        steps: ['Abrir Grafana SOC', 'Revisar Prometheus target up', 'Inspeccionar logs de backend', 'Validar DB y Ganache']
+      },
+      'backend-5xx': {
+        title: 'Errores 5xx sostenidos',
+        summary: 'Hay error HTTP persistente. Revisa rutas, DB, contratos y timeouts.',
+        steps: ['Inspeccionar panel de latencia', 'Buscar WRITE_NOTE_ERROR y PREDICT_ERROR', 'Correlacionar con Loki', 'Reiniciar solo el servicio afectado']
+      },
+      'login-failed': {
+        title: 'Anomalía de login',
+        summary: 'Detecta fuerza bruta, credenciales inválidas o MFA ausente.',
+        steps: ['Revisar usuarios y roles', 'Ver alertas y rate limit', 'Correlacionar IP/usuario en Loki', 'Rotar credenciales si aplica']
+      },
+      'backend-latency': {
+        title: 'Latencia alta',
+        summary: 'La API responde lenta. Comprueba DB, bloqueos y llamadas blockchain.',
+        steps: ['Ver p95 en Grafana', 'Revisar queries lentas', 'Inspeccionar Ganache', 'Corregir endpoint degradado']
+      },
+      'ganache-down': {
+        title: 'Ganache no disponible',
+        summary: 'La red blockchain local no responde. Revisa el contenedor y el puerto 8545.',
+        steps: ['Abrir healthcheck de Ganache', 'Revisar logs del contenedor', 'Validar despliegue de contratos', 'Reiniciar Ganache si es necesario']
+      },
+      'ganache-stalled': {
+        title: 'Ganache estancado',
+        summary: 'No hay bloques nuevos. Puede haber problemas en la cadena o en el minado local.',
+        steps: ['Comprobar block age', 'Revisar transacciones recientes', 'Validar cuentas y gas', 'Forzar re-deploy de contratos si procede']
+      },
+      'postgres-down': {
+        title: 'PostgreSQL caído',
+        summary: 'La persistencia de la aplicación está degradada.',
+        steps: ['Revisar pg_isready', 'Comprobar volumen persistente', 'Buscar errores de conexión', 'Levantar el servicio']
+      },
+      'grafana-down': {
+        title: 'Grafana no disponible',
+        summary: 'El panel SOC está degradado.',
+        steps: ['Revisar contenedor Grafana', 'Comprobar provisioning', 'Validar puerto 3002', 'Reiniciar servicio']
+      },
+      'loki-down': {
+        title: 'Loki no disponible',
+        summary: 'La capa de logs no responde.',
+        steps: ['Revisar Loki y Promtail', 'Validar volumen y config', 'Correlacionar alertas', 'Reiniciar la stack de logs']
+      }
+    };
+    const cfg = map[runbook] || { title: 'Incidente', summary: 'Runbook genérico del SOC.', steps: ['Abrir Grafana', 'Revisar Alertmanager', 'Correlacionar Loki', 'Aislar el servicio'] };
+    document.getElementById('title').textContent = cfg.title;
+    document.getElementById('summary').textContent = cfg.summary;
+    document.getElementById('steps').innerHTML = cfg.steps.map((s) => `<li>${s}</li>`).join('');
+  </script>
+</body>
+</html>

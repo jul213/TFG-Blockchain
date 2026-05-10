@@ -3,14 +3,16 @@ module.exports = {
     {
       name: "ganache-blockchain",
       script: "ganache",
-      args: "--host 0.0.0.0 --port 8545 --db /root/tfg_project/ganache_db"
+      args: "--host 0.0.0.0 --port 8545 --db /home/julio/tfg_project/ganache_db"
     },
     {
       name: "backend-tfg",
-      script: "./blockchain/server.js",
-      cwd: "/root/tfg_project",
+      script: "./blockchain/bootstrap.js",
+      interpreter: "node",
+      cwd: "/home/julio/tfg_project",
       env: {
-        NODE_ENV: "production"
+        NODE_ENV: "production",
+        PORT: "3000"
       }
     }
   ]

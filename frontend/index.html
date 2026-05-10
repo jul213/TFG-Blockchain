@@ -6,6 +6,9 @@
     <title>SGU - Sistema de Gestión Universitaria</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qr-creator/dist/qr-creator.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -20,6 +23,7 @@
     </style>
 </head>
 <body class="bg-[#f8fafc] text-slate-900">
+    <div id="toast-container" class="fixed top-4 right-4 z-[100] space-y-2"></div>
 
     <div id="login-screen" class="min-h-screen flex items-center justify-center bg-[#0f172a] px-4">
         <div class="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md animate-fade-in">
@@ -36,6 +40,10 @@
                 <div class="relative">
                     <i data-lucide="lock" class="absolute left-3 top-3.5 w-5 h-5 text-slate-400"></i>
                     <input type="password" id="password" class="w-full pl-11 pr-4 py-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="Contraseña">
+                </div>
+                <div class="relative">
+                    <i data-lucide="shield" class="absolute left-3 top-3.5 w-5 h-5 text-slate-400"></i>
+                    <input type="password" id="mfa_code" class="w-full pl-11 pr-4 py-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="MFA opcional">
                 </div>
                 <button onclick="handleLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-200 active:scale-[0.98]">Acceder al sistema</button>
             </div>
@@ -73,6 +81,9 @@
                     <div class="hidden md:flex items-center gap-2.5 text-xs bg-emerald-50 text-emerald-700 px-4 py-2 rounded-full font-bold border border-emerald-100">
                         <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Nodo Blockchain Activo
                     </div>
+                    <div id="wallet-status" class="hidden md:flex items-center gap-2.5 text-xs bg-amber-50 text-amber-700 px-4 py-2 rounded-full font-bold border border-amber-100">
+                        Wallet no detectada
+                    </div>
                     <button onclick="showQR()" class="bg-slate-50 p-3 rounded-xl hover:bg-white hover:shadow-md border border-slate-100 text-slate-600 transition active:scale-95">
                         <i data-lucide="qr-code" class="w-6 h-6"></i>
                     </button>
@@ -93,65 +104,254 @@
     </div>
 
     <script>
-        const API_URL = "https://rolled-bestsellers-drums-gas.trycloudflare.com";
+        const API_URL = '';
+        let txState = 'idle';
+        const MENU_BY_ROLE = {
+            STUDENT: ['Mis Cursos', 'Consultar Notas'],
+            TEACHER: ['Pasar Asistencia', 'Subir Notas', 'Consultar Notas', 'Mis Cursos'],
+            RECTOR: ['Informes', 'Observabilidad']
+        };
+        const ICONS = {
+            'Pasar Asistencia': 'check-square',
+            'Subir Notas': 'database',
+            'Consultar Notas': 'clipboard-list',
+            'Mis Cursos': 'book-open',
+            'Informes': 'bar-chart-3',
+            'Observabilidad': 'monitor-check'
+        };
+
+        function showToast(message, variant = 'info') {
+            const colors = {
+                info: 'bg-slate-900 text-white',
+                success: 'bg-emerald-600 text-white',
+                error: 'bg-red-600 text-white'
+            };
+            const toast = document.createElement('div');
+            toast.className = `${colors[variant] || colors.info} px-4 py-3 rounded-xl shadow-lg text-sm font-semibold`;
+            toast.textContent = message;
+            document.getElementById('toast-container').appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        }
+
+        const gradeTone = (value) => {
+            const score = Number(value);
+            if (Number.isNaN(score)) return 'bg-slate-500';
+            if (score < 5) return 'bg-red-500';
+            if (score < 7) return 'bg-amber-500';
+            return 'bg-emerald-500';
+        };
+
+        function exportRectorPDF() {
+            const report = window.lastRectorReport;
+            if (!report) {
+                showToast('Primero carga los informes', 'error');
+                return;
+            }
+            fetch(`${API_URL}/api/rector/report-export`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${localStorage.getItem('tfg_token') || ''}`
+                },
+                body: JSON.stringify({ format: 'pdf' })
+            }).catch(() => {});
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape' });
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(20);
+            doc.text('SGU - Informe Rectoral', 14, 18);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Generado: ${new Date().toLocaleString('es-ES')}`, 14, 25);
+            const analytics = report.analytics || report.insights || {};
+            const topRisk = (analytics.studentRiskRanking || [])[0];
+            const weakestCourse = (analytics.courseHealthRanking || [])[0];
+            const strongestTrend = (analytics.descendingTrendRanking || [])[0];
+            const topAnomaly = (analytics.anomalies || [])[0];
+
+            doc.setFontSize(11);
+            doc.text(`Riesgo máximo: ${topRisk ? `${topRisk.entity} (${topRisk.riskScore})` : 'N/D'}`, 14, 31);
+            doc.text(`Curso más débil: ${weakestCourse ? `${weakestCourse.entity} (${weakestCourse.healthScore})` : 'N/D'}`, 14, 37);
+            doc.text(`Tendencia negativa: ${strongestTrend ? `${strongestTrend.scope}: ${strongestTrend.entity}` : 'N/D'}`, 14, 43);
+            doc.text(`Anomalías: ${analytics.anomalies ? analytics.anomalies.length : 0}`, 14, 49);
+
+            doc.autoTable({
+                startY: 56,
+                head: [['Rol', 'Total']],
+                body: (report.roleBreakdown || []).map((row) => [row.role, String(row.total)]),
+                theme: 'grid',
+                headStyles: { fillColor: [15, 23, 42] }
+            });
+
+            doc.autoTable({
+                startY: doc.lastAutoTable.finalY + 8,
+                head: [['Curso', 'Estudiantes']],
+                body: (report.courses || []).map((row) => [row.course_name, String(row.total_students)]),
+                theme: 'grid',
+                headStyles: { fillColor: [37, 99, 235] }
+            });
+
+            doc.autoTable({
+                startY: doc.lastAutoTable.finalY + 8,
+                head: [['Nota', 'Total']],
+                body: (report.gradeDistribution || []).map((row) => [`${row.bucket}`, String(row.total)]),
+                theme: 'grid',
+                headStyles: { fillColor: [16, 185, 129] }
+            });
+
+            doc.autoTable({
+                startY: doc.lastAutoTable.finalY + 8,
+                head: [['Estudiante', 'Asignatura', 'Nota', 'Hash']],
+                body: (report.latestGrades || []).map((row) => [row.student_email, row.subject, String(row.grade), row.blockchain_hash]),
+                theme: 'striped',
+                styles: { fontSize: 8, cellWidth: 'wrap' },
+                headStyles: { fillColor: [15, 23, 42] }
+            });
+
+            if (analytics.studentRiskRanking && analytics.studentRiskRanking.length) {
+                doc.autoTable({
+                    startY: doc.lastAutoTable.finalY + 8,
+                    head: [['Estudiante', 'Riesgo', 'Media', 'Pendiente/semana']],
+                    body: analytics.studentRiskRanking.slice(0, 10).map((row) => [row.entity, String(row.riskScore), String(row.average), String(row.slopePerWeek)]),
+                    theme: 'grid',
+                    headStyles: { fillColor: [220, 38, 38] }
+                });
+            }
+
+            if (analytics.courseHealthRanking && analytics.courseHealthRanking.length) {
+                doc.autoTable({
+                    startY: doc.lastAutoTable.finalY + 8,
+                    head: [['Curso', 'Salud', 'Media', 'Pendiente/semana']],
+                    body: analytics.courseHealthRanking.slice(0, 10).map((row) => [row.entity, String(row.healthScore), String(row.average), String(row.slopePerWeek)]),
+                    theme: 'grid',
+                    headStyles: { fillColor: [16, 185, 129] }
+                });
+            }
+
+            if (analytics.descendingTrendRanking && analytics.descendingTrendRanking.length) {
+                doc.autoTable({
+                    startY: doc.lastAutoTable.finalY + 8,
+                    head: [['Scope', 'Entidad', 'Pendiente/semana', 'Score']],
+                    body: analytics.descendingTrendRanking.slice(0, 10).map((row) => [row.scope, row.entity, String(row.slopePerWeek), String(row.trendScore)]),
+                    theme: 'grid',
+                    headStyles: { fillColor: [37, 99, 235] }
+                });
+            }
+
+            if (analytics.anomalies && analytics.anomalies.length) {
+                doc.autoTable({
+                    startY: doc.lastAutoTable.finalY + 8,
+                    head: [['Scope', 'Entidad', 'Anomalía', 'Última nota']],
+                    body: analytics.anomalies.slice(0, 10).map((row) => [row.scope, row.entity, String(row.anomalyScore), String(row.lastGrade)]),
+                    theme: 'grid',
+                    headStyles: { fillColor: [190, 24, 93] }
+                });
+            }
+
+            if (analytics.formulas) {
+                doc.autoTable({
+                    startY: doc.lastAutoTable.finalY + 8,
+                    head: [['Métrica', 'Fórmula']],
+                    body: [
+                        ['Riesgo de abandono', analytics.formulas.abandonmentRisk || 'N/D'],
+                        ['Salud de curso', analytics.formulas.courseHealth || 'N/D'],
+                        ['Tendencia descendente', analytics.formulas.descendingTrend || 'N/D'],
+                        ['Anomalías', analytics.formulas.anomalies || 'N/D']
+                    ],
+                    theme: 'grid',
+                    styles: { fontSize: 8, cellWidth: 'wrap' },
+                    headStyles: { fillColor: [15, 23, 42] }
+                });
+            }
+
+            doc.save('informe-rectoral.pdf');
+        }
+
+        async function detectWallet() {
+            const badge = document.getElementById('wallet-status');
+            if (!badge) return;
+            if (!window.ethereum) {
+                badge.className = "hidden md:flex items-center gap-2.5 text-xs bg-amber-50 text-amber-700 px-4 py-2 rounded-full font-bold border border-amber-100";
+                badge.textContent = 'Wallet no detectada';
+                return;
+            }
+            try {
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                badge.className = "hidden md:flex items-center gap-2.5 text-xs bg-emerald-50 text-emerald-700 px-4 py-2 rounded-full font-bold border border-emerald-100";
+                badge.textContent = accounts.length ? 'Wallet conectada' : 'Wallet detectada';
+            } catch (_e) {
+                badge.className = "hidden md:flex items-center gap-2.5 text-xs bg-red-50 text-red-700 px-4 py-2 rounded-full font-bold border border-red-100";
+                badge.textContent = 'Error Wallet';
+            }
+        }
+        
         let currentUser = JSON.parse(localStorage.getItem('tfg_user')) || null;
+
+        async function apiFetch(path, options = {}) {
+            const token = localStorage.getItem('tfg_token');
+            const requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-Request-Id': requestId,
+                ...(options.headers || {})
+            };
+            if (token) headers.Authorization = `Bearer ${token}`;
+            const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || payload.success === false) {
+                const error = new Error(payload.error?.message || payload.message || `Error ${response.status}`);
+                error.code = payload.error?.code;
+                error.requestId = payload.error?.requestId || payload.requestId || requestId;
+                throw error;
+            }
+            return payload;
+        }
 
         async function handleLogin() {
             const user = document.getElementById('username').value.trim();
             const pass = document.getElementById('password').value;
+            const mfa_code = document.getElementById('mfa_code').value.trim();
             if(!user || !pass) return;
             try {
                 const res = await fetch(`${API_URL}/api/login`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({user, pass})
+                    body: JSON.stringify({user, pass, mfa_code})
                 });
                 const data = await res.json();
                 if(data.success) {
                     localStorage.setItem('tfg_token', data.token);
-                    localStorage.setItem('tfg_user', JSON.stringify({role: data.role, name: data.name}));
+                    localStorage.setItem('tfg_user', JSON.stringify({role: data.role, role_id: data.role_id, name: data.name, user: user}));
                     location.reload();
-                } else { alert("Credenciales inválidas"); }
-            } catch(e) { alert("Servidor offline"); }
+                } else if (data.mfa_required) {
+                    showToast("MFA requerido para este rol", "error");
+                } else { showToast("Credenciales inválidas", "error"); }
+            } catch(e) { showToast("Servidor offline o certificado no confiable", "error"); }
         }
 
         async function loadContent(page) {
             const area = document.getElementById('content-area');
-            const token = localStorage.getItem('tfg_token');
             document.getElementById('page-title').innerText = page;
             area.innerHTML = '<div class="flex flex-col items-center justify-center h-64 gap-4"><div class="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin"></div><p class="text-slate-400 font-medium animate-pulse">Sincronizando con Postgres...</p></div>';
 
             if(page === 'Subir Notas') {
+                if (!['TEACHER', 'RECTOR'].includes(currentUser.role)) {
+                    area.innerHTML = '<div class="p-8 bg-red-50 text-red-600 rounded-2xl font-bold border border-red-100">No autorizado para subir notas.</div>';
+                    return;
+                }
                 renderSubirNotas();
             } else if(page === 'Consultar Notas') {
                 renderConsultarNotas();
+            } else if (page === 'Mis Cursos') {
+                renderMisCursos();
+            } else if (page === 'Pasar Asistencia') {
+                renderPasarAsistencia();
+            } else if (page === 'Informes') {
+                renderInformesRector();
+            } else if (page === 'Observabilidad') {
+                renderObservability();
             } else {
-                try {
-                    const res = await fetch(`${API_URL}/api/my-students`, {headers: {'Authorization': `Bearer ${token}`}});
-                    const data = await res.json();
-                    let html = `<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">`;
-                    data.forEach(c => {
-                        html += `
-                        <div class="glass-card p-8 rounded-[2rem] shadow-sm hover:shadow-xl transition-all group">
-                            <div class="flex items-center justify-between mb-6">
-                                <h3 class="font-bold text-xl text-slate-800">${c.courseName}</h3>
-                                <span class="bg-blue-50 text-blue-600 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">${c.students.length} Inscritos</span>
-                            </div>
-                            <div class="space-y-3">
-                                ${c.students.map(s => `
-                                    <div class="flex justify-between items-center p-4 bg-slate-50/50 rounded-2xl border border-transparent hover:border-slate-200 hover:bg-white transition-all">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-2 h-2 bg-blue-400 rounded-full"></div>
-                                            <span class="font-semibold text-slate-700">${s}</span>
-                                        </div>
-                                        ${page === 'Pasar Asistencia' ? '<input type="checkbox" class="w-6 h-6 rounded-lg border-slate-300 text-blue-600 focus:ring-blue-500">' : '<span class="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-bold">VERIFICADO</span>'}
-                                    </div>`).join('')}
-                            </div>
-                            ${page === 'Pasar Asistencia' ? '<button class="mt-8 w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-black transition shadow-lg">Finalizar Pase de Lista</button>' : ''}
-                        </div>`;
-                    });
-                    area.innerHTML = html + `</div>`;
-                } catch(e) { area.innerHTML = '<div class="text-red-500 font-bold p-8 bg-red-50 rounded-2xl border border-red-100">Error: Base de datos no disponible</div>'; }
+                area.innerHTML = '<div class="text-red-500 font-bold p-8 bg-red-50 rounded-2xl border border-red-100">Vista no disponible</div>';
             }
             lucide.createIcons();
         }
@@ -177,7 +377,7 @@
                         </div>
                         <div>
                             <label class="text-xs font-bold text-slate-400 uppercase ml-1 mb-2 block">Nota Final</label>
-                            <input id="not" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 transition" placeholder="0-100">
+                            <input id="not" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 transition" placeholder="0-10">
                         </div>
                     </div>
                     <button onclick="firmarNota()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-5 rounded-2xl transition shadow-xl shadow-indigo-100 mt-6 active:scale-[0.98]">
@@ -192,11 +392,8 @@
         async function renderConsultarNotas() {
             const area = document.getElementById('content-area');
             try {
-                const res = await fetch(`${API_URL}/api/consultar-notas`, {
-                    headers: {'Authorization': `Bearer ${localStorage.getItem('tfg_token')}`}
-                });
-                const data = await res.json();
-                if(!data.success) throw new Error();
+                const data = await apiFetch('/api/consultar-notas');
+                const notas = data.notas || data.data || [];
 
                 let html = `
                 <div class="animate-fade-in space-y-6">
@@ -212,7 +409,7 @@
                             </thead>
                             <tbody class="divide-y divide-slate-50">`;
 
-                data.notas.forEach(nota => {
+                notas.forEach(nota => {
                     html += `
                     <tr class="hover:bg-slate-50/50 transition-colors group">
                         <td class="py-5 pl-4">
@@ -222,7 +419,7 @@
                             </div>
                         </td>
                         <td class="py-5 text-slate-600 font-medium">${nota.subject}</td>
-                        <td class="py-5"><span class="bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-bold">${nota.grade}</span></td>
+                        <td class="py-5"><span class="${gradeTone(nota.grade)} text-white px-3 py-1 rounded-lg text-xs font-bold">${nota.grade}</span></td>
                         <td class="py-5">
                             <div class="flex items-center justify-center gap-2">
                                 <i data-lucide="link" class="w-3 h-3 text-emerald-500"></i>
@@ -242,22 +439,619 @@
             lucide.createIcons();
         }
 
+        async function renderMisCursos() {
+            const area = document.getElementById('content-area');
+            try {
+                const payload = await apiFetch('/api/mis-cursos');
+                const cursos = payload.data || [];
+                const html = `
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
+                        ${cursos.map((c) => `
+                            <div class="glass-card p-6 rounded-2xl">
+                                <h3 class="font-bold text-xl text-slate-800">${c.course_name}</h3>
+                                <p class="text-slate-500 mt-2 text-sm">${c.teacher_name ? `Docente: ${c.teacher_name}` : ''}</p>
+                                <p class="text-slate-600 mt-2 text-sm">${c.total_students !== undefined ? `Estudiantes: ${c.total_students}` : ''}</p>
+                            </div>
+                        `).join('')}
+                    </div>`;
+                area.innerHTML = html || '<div class="text-slate-500">Sin cursos disponibles</div>';
+            } catch (e) {
+                area.innerHTML = '<div class="p-8 bg-red-50 text-red-600 rounded-2xl font-bold border border-red-100">Error al cargar cursos</div>';
+            }
+        }
+
+        async function renderPasarAsistencia() {
+            const area = document.getElementById('content-area');
+            if (!['TEACHER', 'RECTOR'].includes(currentUser.role)) {
+                area.innerHTML = '<div class="p-8 bg-red-50 text-red-600 rounded-2xl font-bold border border-red-100">No autorizado.</div>';
+                return;
+            }
+            try {
+                const payload = await apiFetch('/api/pasar-asistencia');
+                const cursos = payload.data || [];
+                const html = `
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
+                    ${cursos.map(c => `
+                        <div class="glass-card p-8 rounded-[2rem] shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="font-bold text-xl text-slate-800">${c.courseName}</h3>
+                                <span class="bg-blue-50 text-blue-600 text-[10px] font-bold px-3 py-1 rounded-full uppercase">${c.students.length} alumnos</span>
+                            </div>
+                            <div class="space-y-3">
+                                ${c.students.map(s => `<label class="flex items-center justify-between p-4 bg-slate-50 rounded-xl"><span>${s}</span><input type="checkbox" class="w-5 h-5"></label>`).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>`;
+                area.innerHTML = html || '<div class="text-slate-500">No hay cursos para asistencia.</div>';
+            } catch (e) {
+                area.innerHTML = '<div class="p-8 bg-red-50 text-red-600 rounded-2xl font-bold border border-red-100">Error al cargar asistencia</div>';
+            }
+            lucide.createIcons();
+        }
+
+        async function renderInformesRector() {
+            const area = document.getElementById('content-area');
+            if (currentUser.role !== 'RECTOR') {
+                area.innerHTML = '<div class="p-8 bg-red-50 text-red-600 rounded-2xl font-bold border border-red-100">Solo rector.</div>';
+                return;
+            }
+            try {
+                const [payload, insightsPayload] = await Promise.all([
+                    apiFetch('/api/rector/informes'),
+                    apiFetch('/api/analytics/insights?scope=course')
+                ]);
+                const data = payload.data || {};
+                const analytics = insightsPayload.data || {};
+                window.lastRectorReport = { ...data, analytics, insights: analytics };
+                const riskRanking = analytics.studentRiskRanking || [];
+                const healthRanking = analytics.courseHealthRanking || [];
+                const trendRanking = analytics.descendingTrendRanking || [];
+                const anomalies = analytics.anomalies || [];
+                const formulas = analytics.formulas || {};
+                const evolution = analytics.evolution || [];
+                const summary = analytics.summary || {};
+                const topRisk = riskRanking[0] || null;
+                const weakestCourse = healthRanking[0] || null;
+                const strongestTrendDrop = trendRanking[0] || null;
+                const topAnomaly = anomalies[0] || null;
+
+                const barData = (items, valueKey, labelKey = 'entity') => ({
+                    labels: items.map((item) => item[labelKey]),
+                    values: items.map((item) => Number(item[valueKey] || 0))
+                });
+
+                area.innerHTML = `
+                    <div class="space-y-6 animate-fade-in">
+                        <div class="flex items-center justify-between gap-4 flex-wrap">
+                            <div>
+                                <h2 class="font-bold text-3xl text-slate-900 tracking-tight">Informe Rectoral</h2>
+                                <p class="text-slate-500 text-sm mt-1">Riesgo de abandono, salud de curso, tendencia descendente y anomalías</p>
+                            </div>
+                            <button onclick="exportRectorPDF()" class="bg-slate-900 text-white px-5 py-3 rounded-2xl font-bold shadow-lg shadow-slate-200 hover:bg-black transition">
+                                Exportar PDF
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div class="glass-card p-5 rounded-2xl">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Riesgo máximo</p>
+                                <p class="mt-2 text-2xl font-bold text-red-600">${topRisk ? `${topRisk.riskScore}` : '0'}</p>
+                                <p class="text-sm text-slate-600 mt-1">${topRisk ? topRisk.entity : 'Sin datos'}</p>
+                            </div>
+                            <div class="glass-card p-5 rounded-2xl">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Curso más débil</p>
+                                <p class="mt-2 text-2xl font-bold text-amber-600">${weakestCourse ? `${weakestCourse.healthScore}` : '0'}</p>
+                                <p class="text-sm text-slate-600 mt-1">${weakestCourse ? weakestCourse.entity : 'Sin datos'}</p>
+                            </div>
+                            <div class="glass-card p-5 rounded-2xl">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Tendencia negativa</p>
+                                <p class="mt-2 text-2xl font-bold text-blue-600">${strongestTrendDrop ? strongestTrendDrop.slopePerWeek : '0'}</p>
+                                <p class="text-sm text-slate-600 mt-1">${strongestTrendDrop ? `${strongestTrendDrop.scope}: ${strongestTrendDrop.entity}` : 'Sin datos'}</p>
+                            </div>
+                            <div class="glass-card p-5 rounded-2xl">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Anomalías</p>
+                                <p class="mt-2 text-2xl font-bold text-rose-600">${anomalies.length}</p>
+                                <p class="text-sm text-slate-600 mt-1">${topAnomaly ? topAnomaly.entity : 'Sin datos'}</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <div class="glass-card p-6 rounded-2xl lg:col-span-2">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 class="font-bold text-lg text-slate-900">Riesgo de abandono</h3>
+                                        <p class="text-xs text-slate-500 mt-1">Media baja + pendiente negativa + volatilidad + recencia + anomalías</p>
+                                    </div>
+                                    <span class="text-xs text-slate-500 font-semibold">${riskRanking.length} estudiantes evaluados</span>
+                                </div>
+                                <canvas id="risk-chart" height="150"></canvas>
+                                <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    ${riskRanking.slice(0, 4).map((item) => `
+                                        <div class="rounded-2xl border border-slate-100 p-4 bg-slate-50">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <p class="font-semibold text-slate-800">${item.entity}</p>
+                                                <span class="text-[10px] px-2 py-1 rounded-full bg-red-50 text-red-700 font-bold">${item.riskLevel}</span>
+                                            </div>
+                                            <p class="text-xs text-slate-500 mt-2">Score: <b>${item.riskScore}</b> · Media: ${item.average} · Pendiente/semana: ${item.slopePerWeek}</p>
+                                            <p class="text-xs text-slate-500 mt-1">${item.reason}</p>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <div class="glass-card p-6 rounded-2xl">
+                                <h3 class="font-bold text-lg text-slate-900 mb-3">Fórmulas y contexto</h3>
+                                <div class="space-y-4 text-sm text-slate-700">
+                                    <div class="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Riesgo de abandono</p>
+                                        <p>${formulas.abandonmentRisk || 'No disponible'}</p>
+                                    </div>
+                                    <div class="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Salud del curso</p>
+                                        <p>${formulas.courseHealth || 'No disponible'}</p>
+                                    </div>
+                                    <div class="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Tendencia descendente</p>
+                                        <p>${formulas.descendingTrend || 'No disponible'}</p>
+                                    </div>
+                                    <div class="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Anomalías</p>
+                                        <p>${formulas.anomalies || 'No disponible'}</p>
+                                    </div>
+                                    <div class="text-xs text-slate-500">
+                                        <p>Estudiantes analizados: <b>${summary.studentsTracked || riskRanking.length}</b></p>
+                                        <p>Cursos analizados: <b>${summary.coursesTracked || healthRanking.length}</b></p>
+                                        <p>Anomalías detectadas: <b>${summary.anomalyCount || anomalies.length}</b></p>
+                                        <p>Actualizado: <b>${summary.generatedAt ? new Date(summary.generatedAt).toLocaleString('es-ES') : 'N/D'}</b></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div class="glass-card p-6 rounded-2xl">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 class="font-bold text-lg text-slate-900">Salud de cursos</h3>
+                                        <p class="text-xs text-slate-500 mt-1">Media alta - penalizaciones por tendencia, volatilidad y anomalías</p>
+                                    </div>
+                                    <span class="text-xs text-slate-500 font-semibold">${healthRanking.length} cursos evaluados</span>
+                                </div>
+                                <canvas id="health-chart" height="170"></canvas>
+                                <div class="mt-5 space-y-3">
+                                    ${healthRanking.slice(0, 4).map((item) => `
+                                        <div class="rounded-2xl border border-slate-100 p-4 bg-slate-50">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <p class="font-semibold text-slate-800">${item.entity}</p>
+                                                <span class="text-[10px] px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-bold">${item.healthLevel}</span>
+                                            </div>
+                                            <p class="text-xs text-slate-500 mt-2">Score: <b>${item.healthScore}</b> · Media: ${item.average} · Pendiente/semana: ${item.slopePerWeek}</p>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <div class="glass-card p-6 rounded-2xl">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 class="font-bold text-lg text-slate-900">Evolución temporal</h3>
+                                        <p class="text-xs text-slate-500 mt-1">Promedio diario de calificaciones y muestras</p>
+                                    </div>
+                                    <span class="text-xs text-slate-500 font-semibold">${evolution.length} puntos</span>
+                                </div>
+                                <canvas id="trend-chart" height="170"></canvas>
+                                <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    ${trendRanking.slice(0, 4).map((item) => `
+                                        <div class="rounded-2xl border border-slate-100 p-4 bg-slate-50">
+                                            <p class="font-semibold text-slate-800">${item.scope}: ${item.entity}</p>
+                                            <p class="text-xs text-slate-500 mt-2">Pendiente/semana: <b>${item.slopePerWeek}</b> · Score de tendencia: ${item.trendScore}</p>
+                                            <p class="text-xs text-slate-500 mt-1">Último cambio: ${item.deltaFromPrevious} · Recencia: ${item.recencyDays} días</p>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div class="glass-card p-6 rounded-2xl">
+                                <h3 class="font-bold text-lg text-slate-900 mb-4">Tendencias descendentes</h3>
+                                <div class="space-y-3">
+                                    ${trendRanking.slice(0, 8).map((item, index) => `
+                                        <div class="rounded-2xl bg-slate-50 border border-slate-100 p-4 flex items-center justify-between gap-3">
+                                            <div>
+                                                <p class="font-semibold text-slate-800">#${index + 1} ${item.scope}: ${item.entity}</p>
+                                                <p class="text-xs text-slate-500 mt-1">Media ${item.average} · Pendiente/semana ${item.slopePerWeek} · Δ ${item.deltaFromPrevious}</p>
+                                            </div>
+                                            <span class="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-bold">${item.trendScore}</span>
+                                        </div>
+                                    `).join('') || '<p class="text-sm text-slate-500">Sin tendencia negativa significativa</p>'}
+                                </div>
+                            </div>
+                            <div class="glass-card p-6 rounded-2xl">
+                                <h3 class="font-bold text-lg text-slate-900 mb-4">Anomalías</h3>
+                                <div class="space-y-3">
+                                    ${anomalies.slice(0, 8).map((item, index) => `
+                                        <div class="rounded-2xl bg-slate-50 border border-slate-100 p-4 flex items-center justify-between gap-3">
+                                            <div>
+                                                <p class="font-semibold text-slate-800">#${index + 1} ${item.scope}: ${item.entity}</p>
+                                                <p class="text-xs text-slate-500 mt-1">Última nota ${item.lastGrade} · Δ ${item.deltaFromPrevious} · σ ${item.stdDev}</p>
+                                            </div>
+                                            <span class="text-xs px-2 py-1 rounded-full bg-rose-50 text-rose-700 font-bold">${item.anomalyScore}</span>
+                                        </div>
+                                    `).join('') || '<p class="text-sm text-slate-500">Sin anomalías destacables</p>'}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="glass-card p-5 rounded-2xl">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Rectores</p>
+                                <p class="mt-2 text-2xl font-bold text-slate-900">${(data.roleBreakdown || []).find((x) => x.role === 'RECTOR')?.total || 0}</p>
+                            </div>
+                            <div class="glass-card p-5 rounded-2xl">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Profesores</p>
+                                <p class="mt-2 text-2xl font-bold text-slate-900">${(data.roleBreakdown || []).find((x) => x.role === 'TEACHER')?.total || 0}</p>
+                            </div>
+                            <div class="glass-card p-5 rounded-2xl">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Estudiantes</p>
+                                <p class="mt-2 text-2xl font-bold text-slate-900">${(data.roleBreakdown || []).find((x) => x.role === 'STUDENT')?.total || 0}</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <div class="glass-card p-6 rounded-2xl lg:col-span-2">
+                                <h3 class="font-bold text-lg mb-3 text-slate-900">Cursos</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    ${(data.courses || []).map((course) => `
+                                        <div class="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                                            <p class="font-semibold text-slate-800">${course.course_name}</p>
+                                            <p class="text-xs text-slate-500 mt-1">Estudiantes: <b>${course.total_students}</b></p>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <div class="glass-card p-6 rounded-2xl">
+                                <h3 class="font-bold text-lg mb-3 text-slate-900">Distribución académica</h3>
+                                <div class="space-y-3 text-sm text-slate-700">
+                                    ${(data.gradeDistribution || []).slice(0, 10).map((row) => `<p>${row.bucket}: <b>${row.total}</b></p>`).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const destroyChart = (key) => {
+                    if (window.tfgCharts?.[key]) {
+                        window.tfgCharts[key].destroy();
+                    }
+                    window.tfgCharts = window.tfgCharts || {};
+                };
+
+                const drawHorizontalBar = (key, canvasId, labels, values, color) => {
+                    const canvas = document.getElementById(canvasId);
+                    if (!canvas) return;
+                    destroyChart(key);
+                    window.tfgCharts[key] = new Chart(canvas, {
+                        type: 'bar',
+                        data: {
+                            labels,
+                            datasets: [{
+                                data: values,
+                                backgroundColor: color,
+                                borderColor: color,
+                                borderWidth: 1,
+                                borderRadius: 8
+                            }]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { beginAtZero: true, grid: { color: 'rgba(148, 163, 184, 0.12)' } },
+                                y: { grid: { display: false } }
+                            }
+                        }
+                    });
+                };
+
+                const drawLine = (key, canvasId, labels, values, color) => {
+                    const canvas = document.getElementById(canvasId);
+                    if (!canvas) return;
+                    destroyChart(key);
+                    window.tfgCharts[key] = new Chart(canvas, {
+                        type: 'line',
+                        data: {
+                            labels,
+                            datasets: [{
+                                data: values,
+                                borderColor: color,
+                                backgroundColor: color,
+                                tension: 0.3,
+                                fill: false,
+                                pointRadius: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { grid: { color: 'rgba(148, 163, 184, 0.12)' } },
+                                y: { beginAtZero: true, grid: { color: 'rgba(148, 163, 184, 0.12)' } }
+                            }
+                        }
+                    });
+                };
+
+                const riskSet = barData(riskRanking.slice(0, 8), 'riskScore');
+                const healthSet = barData(healthRanking.slice(0, 8), 'healthScore');
+                const trendDates = evolution.map((item) => new Date(item.day).toLocaleDateString('es-ES'));
+                const trendValues = evolution.map((item) => Number(item.averageGrade || 0));
+
+                drawHorizontalBar('risk', 'risk-chart', riskSet.labels, riskSet.values, 'rgba(220, 38, 38, 0.8)');
+                drawHorizontalBar('health', 'health-chart', healthSet.labels, healthSet.values, 'rgba(37, 99, 235, 0.8)');
+                drawLine('trend', 'trend-chart', trendDates, trendValues, 'rgba(16, 185, 129, 0.95)');
+            } catch (e) {
+                area.innerHTML = '<div class="p-8 bg-red-50 text-red-600 rounded-2xl font-bold border border-red-100">Error al cargar informes</div>';
+            }
+        }
+
+        async function renderObservability() {
+            const area = document.getElementById('content-area');
+            try {
+                const [statusRes, integrityRes, auditRes] = await Promise.all([
+                    apiFetch('/api/status'),
+                    apiFetch('/api/blockchain/integrity?limit=25'),
+                    apiFetch('/api/audit/events?limit=12')
+                ]);
+                const status = statusRes.data || {};
+                const integrity = integrityRes.data || {};
+                const auditEvents = auditRes.data || [];
+                const block = status.latestBlock || {};
+                area.innerHTML = `
+                    <div class="space-y-6 animate-fade-in">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <a href="http://localhost:3002/d/tfg-soc/tfg-soc" target="_blank" class="glass-card p-5 rounded-2xl block">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Grafana</p>
+                                <p class="mt-2 font-bold text-slate-800">SOC Center</p>
+                            </a>
+                            <a href="http://localhost:9090" target="_blank" class="glass-card p-5 rounded-2xl block">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Prometheus</p>
+                                <p class="mt-2 font-bold text-slate-800">Scrapes y reglas</p>
+                            </a>
+                            <a href="http://localhost:9093" target="_blank" class="glass-card p-5 rounded-2xl block">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Alertmanager</p>
+                                <p class="mt-2 font-bold text-slate-800">Alertas SOC</p>
+                            </a>
+                            <a href="http://localhost:3100" target="_blank" class="glass-card p-5 rounded-2xl block">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Loki</p>
+                                <p class="mt-2 font-bold text-slate-800">Logs centralizados</p>
+                            </a>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div class="glass-card p-5 rounded-2xl"><p class="text-xs uppercase tracking-widest text-slate-400 font-bold">PostgreSQL</p><p class="mt-2 text-lg font-bold ${status.db ? 'text-emerald-600' : 'text-red-600'}">${status.db ? 'Online' : 'Offline'}</p></div>
+                            <div class="glass-card p-5 rounded-2xl"><p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Ganache</p><p class="mt-2 text-lg font-bold ${status.blockchain ? 'text-emerald-600' : 'text-red-600'}">${status.blockchain ? 'Online' : 'Offline'}</p></div>
+                            <div class="glass-card p-5 rounded-2xl"><p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Uptime</p><p class="mt-2 text-lg font-bold text-slate-800">${status.uptimeSeconds || 0}s</p></div>
+                            <div class="glass-card p-5 rounded-2xl"><p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Bloque</p><p class="mt-2 text-lg font-bold text-slate-800">${block.number ?? 'N/D'}</p></div>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <div class="glass-card p-5 rounded-2xl">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold">Integridad DB + Blockchain</p>
+                                <p class="mt-2 text-2xl font-bold ${integrity.discrepancies ? 'text-red-600' : 'text-emerald-600'}">${integrity.discrepancies || 0} discrepancias</p>
+                                <p class="text-xs text-slate-500 mt-1">${integrity.checked || 0} registros verificados</p>
+                            </div>
+                            <div class="glass-card p-5 rounded-2xl lg:col-span-2">
+                                <p class="text-xs uppercase tracking-widest text-slate-400 font-bold mb-3">Auditoría reciente</p>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    ${auditEvents.slice(0, 6).map((event) => `
+                                        <div class="rounded-xl bg-slate-50 border border-slate-100 p-3">
+                                            <p class="text-xs font-bold text-slate-800">${event.event_type} · ${event.status}</p>
+                                            <p class="text-[11px] text-slate-500 font-mono truncate" title="${event.request_id || ''}">${event.request_id || 'sin request_id'}</p>
+                                        </div>
+                                    `).join('') || '<p class="text-sm text-slate-500">Sin eventos aún</p>'}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="glass-card p-6 rounded-[2rem]">
+                            <div class="flex items-center justify-between gap-4 flex-wrap mb-4">
+                                <div>
+                                    <h3 class="font-bold text-xl text-slate-800">Trazabilidad blockchain</h3>
+                                    <p class="text-xs text-slate-500 mt-1">Busca por hash, bloque, dirección, evento, <code>request_id</code> o actor</p>
+                                </div>
+                                <div id="explorer-summary" class="flex flex-wrap gap-2 text-xs text-slate-500 font-semibold"></div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
+                                <input id="explorer-filter-block" class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-sm" placeholder="Bloque">
+                                <input id="explorer-filter-hash" class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-sm" placeholder="Hash / tx">
+                                <input id="explorer-filter-address" class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-sm" placeholder="Dirección">
+                                <input id="explorer-filter-event" class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-sm" placeholder="Evento">
+                                <input id="explorer-filter-request" class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-sm" placeholder="request_id">
+                                <input id="explorer-filter-actor" class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-sm" placeholder="Actor">
+                                <input id="explorer-filter-gas" class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-sm md:col-span-2" placeholder="Gas mínimo">
+                            </div>
+                            <div id="explorer-contracts" class="flex flex-wrap gap-2 mb-4"></div>
+                            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h4 class="font-bold text-slate-800">Entradas trazables</h4>
+                                        <span id="explorer-count" class="text-xs text-slate-500 font-semibold"></span>
+                                    </div>
+                                    <div id="explorer-list" class="space-y-3"></div>
+                                </div>
+                                <div class="space-y-4">
+                                    <div>
+                                        <div class="flex items-center justify-between mb-3">
+                                            <h4 class="font-bold text-slate-800">Bloques recientes</h4>
+                                            <span id="block-count" class="text-xs text-slate-500 font-semibold"></span>
+                                        </div>
+                                        <div id="block-list" class="space-y-3"></div>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-slate-800 mb-3">Auditoría reciente</h4>
+                                        <div id="audit-list" class="space-y-2"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const renderContractBadges = (contracts = []) => contracts.map((contract) => `
+                    <span class="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 border border-blue-100 px-3 py-1 text-[11px] font-bold">
+                        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                        ${contract.name}
+                        <span class="font-mono text-[10px] opacity-70">${contract.address.slice(0, 10)}...</span>
+                    </span>
+                `).join('');
+
+                const renderEntry = (entry) => {
+                    const sourceClasses = entry.source === 'db'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                        : 'bg-blue-50 text-blue-700 border-blue-100';
+                    const detailLine = entry.entityType === 'grade'
+                        ? `${entry.studentEmail} · ${entry.subject} · ${entry.grade}`
+                        : entry.entityType === 'audit'
+                            ? `${entry.actor || 'n/a'} · ${entry.role || 'n/a'} · ${entry.status || 'n/a'}`
+                            : `${entry.from || 'n/a'} → ${entry.to || 'n/a'}`;
+                    return `
+                        <div class="p-4 rounded-2xl border border-slate-100 bg-slate-50">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="px-2 py-1 rounded-full text-[10px] font-bold ${sourceClasses} border">${entry.source === 'db' ? 'DB + Chain' : 'Chain'}</span>
+                                        <span class="px-2 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">${entry.originContract || entry.contractName || 'N/D'}</span>
+                                        <span class="px-2 py-1 rounded-full text-[10px] font-bold bg-white text-slate-600 border border-slate-200">${entry.eventType || 'TX'}</span>
+                                    </div>
+                                    <p class="mt-2 font-bold text-slate-800">${entry.summary || entry.eventName || entry.eventType || 'Entrada'}</p>
+                                    <p class="text-[11px] text-slate-500 font-mono break-all">${entry.txHash || 'sin hash'}</p>
+                                </div>
+                                <div class="text-right text-[11px] text-slate-600 shrink-0">
+                                    <p><b>Bloque</b> ${entry.blockNumber ?? 'N/D'}</p>
+                                    <p><b>Gas</b> ${entry.gasUsed ?? 'N/D'}</p>
+                                    <p><b>Fecha</b> ${entry.timestamp ? new Date(entry.timestamp).toLocaleString('es-ES') : 'N/D'}</p>
+                                </div>
+                            </div>
+                            <div class="mt-3 text-xs text-slate-600">
+                                <p>${detailLine}</p>
+                                <p class="mt-1 text-[11px] text-slate-500 break-all">${entry.from ? `From: ${entry.from}` : ''}${entry.from && entry.to ? ' · ' : ''}${entry.to ? `To: ${entry.to}` : ''}</p>
+                                <p class="mt-1 text-[11px] text-slate-500">${entry.contractName ? `Contrato: ${entry.contractName}` : 'Contrato: N/D'}${entry.eventName ? ` · Evento on-chain: ${entry.eventName}` : ''}</p>
+                                <p class="mt-1 text-[11px] text-slate-500">${entry.requestId ? `request_id: ${entry.requestId}` : 'request_id: n/a'}${entry.dbRelation ? ` · ${entry.dbRelation}` : ''}</p>
+                            </div>
+                        </div>
+                    `;
+                };
+
+                const renderBlock = (block) => `
+                    <div class="p-4 rounded-2xl border border-slate-100 bg-slate-50">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="font-bold text-slate-800">Bloque #${block.number}</p>
+                                <p class="text-[11px] text-slate-500 font-mono break-all">${block.hash}</p>
+                            </div>
+                            <div class="text-right text-[11px] text-slate-600">
+                                <p><b>Gas usado</b> ${block.gasUsed}</p>
+                                <p><b>Tx</b> ${(block.transactions || []).length}</p>
+                                <p><b>Fecha</b> ${block.timestampIso ? new Date(block.timestampIso).toLocaleString('es-ES') : 'N/D'}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const renderAudit = (event) => `
+                    <div class="rounded-xl bg-slate-50 border border-slate-100 p-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <p class="text-xs font-bold text-slate-800">${event.event_type} · ${event.status}</p>
+                            <span class="text-[10px] px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-600 font-bold">${event.severity || 'low'}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-500 font-mono truncate mt-1" title="${event.request_id || ''}">${event.request_id || 'sin request_id'}</p>
+                        <p class="text-[11px] text-slate-500 mt-1">${event.actor || 'n/a'}${event.role ? ` · ${event.role}` : ''}</p>
+                    </div>
+                `;
+
+                let explorerTimer = null;
+                const loadExplorerData = async () => {
+                    const query = new URLSearchParams();
+                    const appendIf = (name, id) => {
+                        const value = document.getElementById(id)?.value?.trim();
+                        if (value) query.set(name, value);
+                    };
+                    appendIf('block', 'explorer-filter-block');
+                    appendIf('hash', 'explorer-filter-hash');
+                    appendIf('address', 'explorer-filter-address');
+                    appendIf('event_type', 'explorer-filter-event');
+                    appendIf('request_id', 'explorer-filter-request');
+                    appendIf('actor', 'explorer-filter-actor');
+                    appendIf('minGas', 'explorer-filter-gas');
+
+                    const payload = await apiFetch(`/api/blockchain/explorer${query.toString() ? `?${query.toString()}` : ''}`);
+                    const explorer = payload.data || {};
+                    document.getElementById('explorer-summary').innerHTML = `
+                        <span class="inline-flex items-center gap-2 rounded-full bg-slate-100 text-slate-700 px-3 py-1 text-[11px] font-bold">Entradas ${explorer.summary?.entryCount || 0}</span>
+                        <span class="inline-flex items-center gap-2 rounded-full bg-slate-100 text-slate-700 px-3 py-1 text-[11px] font-bold">Grades ${explorer.summary?.dbGrades || 0}</span>
+                        <span class="inline-flex items-center gap-2 rounded-full bg-slate-100 text-slate-700 px-3 py-1 text-[11px] font-bold">Auditorías ${explorer.summary?.dbAudits || 0}</span>
+                        <span class="inline-flex items-center gap-2 rounded-full bg-slate-100 text-slate-700 px-3 py-1 text-[11px] font-bold">Bloques ${explorer.summary?.blockCount || 0}</span>
+                    `;
+                    document.getElementById('explorer-contracts').innerHTML = renderContractBadges(explorer.contracts || []);
+                    document.getElementById('explorer-count').textContent = `${(explorer.entries || []).length} resultados`;
+                    document.getElementById('explorer-list').innerHTML = (explorer.entries || []).map(renderEntry).join('') || '<div class="text-slate-500 text-sm">Sin resultados para estos filtros</div>';
+                    document.getElementById('block-count').textContent = `${(explorer.blocks || []).length} bloques`;
+                    document.getElementById('block-list').innerHTML = (explorer.blocks || []).map(renderBlock).join('') || '<div class="text-slate-500 text-sm">Sin bloques para mostrar</div>';
+                    document.getElementById('audit-list').innerHTML = (explorer.auditEvents || []).slice(0, 6).map(renderAudit).join('') || '<div class="text-slate-500 text-sm">Sin eventos recientes</div>';
+                };
+
+                const scheduleExplorerLoad = () => {
+                    if (explorerTimer) clearTimeout(explorerTimer);
+                    explorerTimer = setTimeout(() => {
+                        loadExplorerData().catch((error) => {
+                            const explorerList = document.getElementById('explorer-list');
+                            if (explorerList) {
+                                explorerList.innerHTML = `<div class="p-4 bg-red-50 text-red-600 rounded-2xl border border-red-100 font-bold">${error.message || 'Error al cargar explorador'}</div>`;
+                            }
+                        });
+                    }, 250);
+                };
+
+                [
+                    'explorer-filter-block',
+                    'explorer-filter-hash',
+                    'explorer-filter-address',
+                    'explorer-filter-event',
+                    'explorer-filter-request',
+                    'explorer-filter-actor',
+                    'explorer-filter-gas'
+                ].forEach((id) => {
+                    const input = document.getElementById(id);
+                    if (input) input.addEventListener('input', scheduleExplorerLoad);
+                });
+
+                await loadExplorerData();
+            } catch (e) {
+                area.innerHTML = '<div class="p-8 bg-red-50 text-red-600 rounded-2xl font-bold border border-red-100">Error al cargar observabilidad</div>';
+            }
+        }
+
         async function firmarNota() {
+            if (txState !== 'idle') return;
             const resDiv = document.getElementById('res');
+            const estudiante = document.getElementById('stu').value.trim();
+            const asignatura = document.getElementById('asig').value.trim();
+            const nota = Number(document.getElementById('not').value);
+            if (!estudiante || !asignatura || Number.isNaN(nota) || nota < 0 || nota > 10) {
+                showToast("Completa todos los campos. Nota válida: 0-10.", "error");
+                return;
+            }
+            txState = 'pending_chain';
             resDiv.innerHTML = '<div class="flex items-center justify-center gap-2 text-indigo-600 font-bold"><i data-lucide="refresh-cw" class="w-5 h-5 animate-spin"></i> Minando bloque...</div>';
             lucide.createIcons();
             try {
-                const res = await fetch(`${API_URL}/api/subir-nota`, {
+                const data = await apiFetch('/api/subir-nota', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('tfg_token')}` },
-                    body: JSON.stringify({ estudiante: document.getElementById('stu').value, asignatura: document.getElementById('asig').value, nota: document.getElementById('not').value })
+                    body: JSON.stringify({ estudiante, asignatura, nota })
                 });
-                const data = await res.json();
                 resDiv.innerHTML = `<div class="p-5 bg-emerald-50 border border-emerald-100 rounded-2xl animate-fade-in">
                     <div class="text-emerald-700 font-bold text-sm mb-2 flex items-center gap-2"><i data-lucide="check-circle" class="w-4 h-4"></i> Bloque confirmado satisfactoriamente</div>
                     <p class="text-[10px] font-mono text-emerald-600 break-all p-3 bg-white/50 rounded-lg">${data.txHash}</p>
                 </div>`;
-            } catch(e) { resDiv.innerHTML = '<div class="p-4 bg-red-50 text-red-600 rounded-xl font-bold">Error de red</div>'; }
+                showToast("Transacción confirmada en blockchain", "success");
+            } catch(e) {
+                resDiv.innerHTML = '<div class="p-4 bg-red-50 text-red-600 rounded-xl font-bold">Error de red/transacción</div>';
+                showToast(e.message || "Error de red/transacción", "error");
+            } finally {
+                txState = 'idle';
+            }
             lucide.createIcons();
         }
 
@@ -284,15 +1078,20 @@
             document.getElementById('user-display-name').innerText = currentUser.name;
             document.getElementById('user-initials').innerText = currentUser.name.split(' ').map(n=>n[0]).join('');
             const menu = document.getElementById('sidebar-menu');
-            const icons = {'Pasar Asistencia': 'check-square', 'Subir Notas': 'database', 'Mis Cursos': 'book-open', 'Consultar Notas': 'clipboard-list'};
-            ['Pasar Asistencia', 'Subir Notas', 'Consultar Notas', 'Mis Cursos'].forEach(i => {
+            const roleMenu = MENU_BY_ROLE[currentUser.role] || [];
+            roleMenu.forEach(i => {
                 menu.innerHTML += `
                 <button onclick="loadContent('${i}')" class="w-full text-left p-4 rounded-2xl sidebar-item flex items-center gap-4 text-slate-400 hover:text-white transition group">
-                    <div class="p-2 rounded-lg bg-slate-800/50 group-hover:bg-blue-600 transition-colors"><i data-lucide="${icons[i]}" class="w-5 h-5"></i></div>
+                    <div class="p-2 rounded-lg bg-slate-800/50 group-hover:bg-blue-600 transition-colors"><i data-lucide="${ICONS[i]}" class="w-5 h-5"></i></div>
                     <span class="font-semibold text-sm">${i}</span>
                 </button>`;
             });
-            loadContent('Subir Notas');
+            loadContent(roleMenu[0] || 'Consultar Notas');
+            detectWallet();
+        }
+        if (window.ethereum) {
+            window.ethereum.on('accountsChanged', detectWallet);
+            window.ethereum.on('chainChanged', detectWallet);
         }
         function logout() { localStorage.clear(); location.reload(); }
         lucide.createIcons();

@@ -1,0 +1,126 @@
+groups:
+  - name: tfg_core_alerts
+    rules:
+      - alert: BackendDown
+        expr: up{job="tfg_backend"} == 0
+        for: 45s
+        labels:
+          severity: critical
+          service: backend
+          mitre_tactic: TA0008
+        annotations:
+          summary: "Backend caído"
+          description: "Prometheus no puede scrapear tfg_backend_final:3000."
+          blast_radius: "API, login, informes, escritura de notas"
+          runbook_url: "https://localhost/docs/runbooks/alert.html?runbook=backend-down"
+          dashboard_url: "http://localhost:3002/d/tfg-soc/tfg-soc"
+          loki_url: "http://localhost:3002/explore?left=%7B%22datasource%22:%22Loki%22,%22queries%22:%5B%7B%22expr%22:%22%7Bcontainer_name%3D%5C%22tfg_backend_final%5C%22%7D%22%7D%5D%7D"
+
+      - alert: Backend5xxHigh
+        expr: sum(rate(tfg_http_requests_total{job="tfg_backend",status_code=~"5.."}[5m])) > 0.15
+        for: 2m
+        labels:
+          severity: high
+          service: backend
+          mitre_tactic: TA0002
+        annotations:
+          summary: "Error rate HTTP elevado"
+          description: "El backend está devolviendo 5xx sostenidos."
+          blast_radius: "Endpoints API afectados; revisar request_id en logs Loki"
+          runbook_url: "https://localhost/docs/runbooks/alert.html?runbook=backend-5xx"
+          dashboard_url: "http://localhost:3002/d/tfg-soc/tfg-soc"
+          loki_url: "http://localhost:3002/explore?left=%7B%22datasource%22:%22Loki%22,%22queries%22:%5B%7B%22expr%22:%22%7Bcontainer_name%3D%5C%22tfg_backend_final%5C%22%7D%20%7C%3D%20%5C%22status%5C%22%22%7D%5D%7D"
+
+      - alert: LoginFailedAnomaly
+        expr: sum(rate(tfg_login_failures_total[10m])) > 5
+        for: 5m
+        labels:
+          severity: high
+          service: backend
+          mitre_tactic: TA0001
+        annotations:
+          summary: "Anomalía de login"
+          description: "Se detectaron fallos de login anómalos."
+          blast_radius: "Autenticación y cuentas privilegiadas"
+          runbook_url: "https://localhost/docs/runbooks/alert.html?runbook=login-failed"
+          dashboard_url: "http://localhost:3002/d/tfg-soc/tfg-soc"
+          loki_url: "http://localhost:3002/explore?left=%7B%22datasource%22:%22Loki%22,%22queries%22:%5B%7B%22expr%22:%22%7Bcontainer_name%3D%5C%22tfg_backend_final%5C%22%7D%20%7C%3D%20%5C%22LOGIN_FAILED%5C%22%22%7D%5D%7D"
+
+      - alert: BackendLatencyHigh
+        expr: histogram_quantile(0.95, sum(rate(tfg_http_request_duration_seconds_bucket{job="tfg_backend"}[5m])) by (le)) > 1
+        for: 3m
+        labels:
+          severity: warning
+          service: backend
+          mitre_tactic: TA0008
+        annotations:
+          summary: "Latencia alta del backend"
+          description: "La latencia p95 del backend supera 1 segundo."
+          runbook_url: "https://localhost/docs/runbooks/alert.html?runbook=backend-latency"
+          dashboard_url: "http://localhost:3002/d/tfg-soc/tfg-soc"
+
+      - alert: BlockchainNodeDown
+        expr: tfg_blockchain_up == 0
+        for: 45s
+        labels:
+          severity: critical
+          service: blockchain
+          mitre_tactic: TA0040
+        annotations:
+          summary: "Nodo blockchain no disponible"
+          description: "El backend reporta que Ganache no está escuchando o no responde."
+          blast_radius: "Sellado de notas, auditoría on-chain y explorer"
+          runbook_url: "https://localhost/docs/runbooks/alert.html?runbook=ganache-down"
+          dashboard_url: "http://localhost:3002/d/tfg-soc/tfg-soc"
+
+      - alert: GanacheStalled
+        expr: tfg_blockchain_last_block_age_seconds > 300
+        for: 5m
+        labels:
+          severity: high
+          service: blockchain
+          mitre_tactic: TA0040
+        annotations:
+          summary: "Ganache estancado"
+          description: "No se han producido bloques nuevos en el intervalo esperado."
+          runbook_url: "https://localhost/docs/runbooks/alert.html?runbook=ganache-stalled"
+          dashboard_url: "http://localhost:3002/d/tfg-soc/tfg-soc"
+
+      - alert: DatabaseDown
+        expr: tfg_db_up == 0
+        for: 45s
+        labels:
+          severity: high
+          service: database
+          mitre_tactic: TA0009
+        annotations:
+          summary: "Base de datos no disponible"
+          description: "El backend reporta fallo de conexión a PostgreSQL."
+          runbook_url: "https://localhost/docs/runbooks/alert.html?runbook=postgres-down"
+          dashboard_url: "http://localhost:3002/d/tfg-soc/tfg-soc"
+
+      - alert: GrafanaDown
+        expr: up{job="tfg_grafana"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          service: grafana
+          mitre_tactic: TA0040
+        annotations:
+          summary: "Grafana no disponible"
+          description: "No se puede consultar Grafana."
+          runbook_url: "https://localhost/docs/runbooks/alert.html?runbook=grafana-down"
+          dashboard_url: "http://localhost:3002/d/tfg-soc/tfg-soc"
+
+      - alert: LokiDown
+        expr: up{job="tfg_loki"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          service: loki
+          mitre_tactic: TA0040
+        annotations:
+          summary: "Loki no disponible"
+          description: "No se puede consultar Loki."
+          runbook_url: "https://localhost/docs/runbooks/alert.html?runbook=loki-down"
+          dashboard_url: "http://localhost:3002/d/tfg-soc/tfg-soc"

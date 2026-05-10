@@ -1,0 +1,16 @@
+name: local-ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Node syntax
+        working-directory: blockchain
+        run: npm test
+      - name: Compose config
+        run: docker compose -f docker-compose.yml config >/dev/null

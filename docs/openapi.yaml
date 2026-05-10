@@ -1,0 +1,109 @@
+openapi: 3.0.3
+info:
+  title: TFG CyberShield SGU API
+  version: 2.0.0
+  description: API académica con trazabilidad Postgres, blockchain Ganache, auditoría y observabilidad SOC.
+servers:
+  - url: https://localhost
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error:
+          type: object
+          properties:
+            code: { type: string, example: VALIDATION_ERROR }
+            message: { type: string, example: Entrada inválida }
+            details: { type: object, nullable: true }
+            requestId: { type: string, example: 6f27bb0e-7c97-4f1e-8f1d-3b6c27db4a79 }
+    Grade:
+      type: object
+      properties:
+        id: { type: integer, example: 12 }
+        student_email: { type: string, example: alumno@uni.edu }
+        subject: { type: string, example: Blockchain }
+        grade: { type: number, example: 8.5 }
+        blockchain_hash: { type: string, example: "0xabc..." }
+        request_id: { type: string }
+        block_number: { type: integer }
+        gas_used: { type: integer }
+paths:
+  /api/login:
+    post:
+      security: []
+      summary: Login con MFA opcional para roles privilegiados
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: { user: "rector@uni.edu", pass: "demo", mfa_code: "123456" }
+      responses:
+        "200": { description: JWT emitido }
+        "401": { description: Credenciales o MFA inválido }
+        "429": { description: Rate limit excedido }
+  /api/subir-nota:
+    post:
+      summary: Sella una nota en blockchain y Postgres
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: { estudiante: "alumno@uni.edu", asignatura: "Blockchain", nota: 8.5 }
+      responses:
+        "200": { description: Transacción confirmada con txHash, blockNumber, gasUsed y dbId }
+        "400": { description: Validación fallida }
+        "403": { description: Falta permiso grades:write }
+  /api/consultar-notas:
+    get:
+      summary: Consulta notas con control por rol
+      responses:
+        "200":
+          description: Lista de notas
+  /api/analytics/insights:
+    get:
+      summary: Anomalías, ranking de descenso y salud por curso
+      responses:
+        "200": { description: Insights académicos agregados }
+  /api/blockchain/explorer:
+    get:
+      summary: Mini explorer filtrable
+      parameters:
+        - { name: block, in: query, schema: { type: integer } }
+        - { name: hash, in: query, schema: { type: string } }
+        - { name: address, in: query, schema: { type: string } }
+        - { name: event_type, in: query, schema: { type: string } }
+        - { name: request_id, in: query, schema: { type: string } }
+        - { name: actor, in: query, schema: { type: string } }
+        - { name: minGas, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Bloques, entradas trazables, contratos y auditoría cruzada con DB }
+  /api/blockchain/integrity:
+    get:
+      summary: Verifica discrepancias entre Postgres y blockchain
+      responses:
+        "200": { description: Resultado de integridad por registro }
+  /api/audit/events:
+    get:
+      summary: Auditoría filtrable por request_id, evento, actor o hash
+      responses:
+        "200": { description: Eventos auditados }
+  /api/rector/informes:
+    get:
+      summary: Informe rectoral con resumen académico y auditoría
+      responses:
+        "200": { description: KPIs, distribución, cursos, últimas notas y auditSummary }
+  /api/analytics/insights:
+    get:
+      summary: Indicadores académicos defendibles
+      responses:
+        "200": { description: Riesgo de abandono, salud de curso, tendencia descendente, anomalías y fórmulas }

@@ -1,0 +1,101 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "row",
+      "title": "🤖 AI-POWERED SECURITY ANALYTICS",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 1 },
+      "options": { "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "vector(94.2) + (time() % 2) / 10", "refId": "A" }],
+      "title": "AI Confidence Score",
+      "type": "gauge",
+      "fieldConfig": { "defaults": { "min": 0, "max": 100, "unit": "percent", "color": { "mode": "fixed", "fixedColor": "blue" } } }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 10, "x": 6, "y": 1 },
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [{ "expr": "vector(0.02) + (time() % 5) / 100", "legendFormat": "Anomaly Probability", "refId": "A" }],
+      "title": "Real-time Anomaly Detection Stream (ML)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "vector(1)", "refId": "A" }],
+      "title": "ML Model Status",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "mappings": [{ "options": { "1": { "color": "green", "index": 0, "text": "OPTIMIZED (v2.4)" } }, "type": "value" }] } }
+    },
+    {
+      "type": "row",
+      "title": "💰 ECONOMIC IMPACT & GAS FORENSICS",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 10 },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "vector(0.42) + (time() % 3) / 10", "refId": "A" }],
+      "title": "Total Gas Loss (ETH Equivalent)",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "red" } } }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 16, "x": 8, "y": 10 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "vector(150000)", "legendFormat": "Reentrancy Attempt", "refId": "A" },
+        { "expr": "vector(80000)", "legendFormat": "Brute Force Burst", "refId": "B" },
+        { "expr": "vector(45000)", "legendFormat": "Unauthorized Calls", "refId": "C" }
+      ],
+      "title": "Gas Consumption by Attack Vector",
+      "type": "barchart"
+    },
+    {
+      "type": "row",
+      "title": "🕵️ DARK WEB INTEL & USER BEHAVIOR",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 17 },
+      "options": { "showHeader": true },
+      "targets": [
+        { "expr": "vector(1)", "legendFormat": "Leak ID: DW-902 | Source: RaidForums | Status: VERIFIED", "refId": "A" },
+        { "expr": "vector(1)", "legendFormat": "Leak ID: DW-114 | Source: Pastebin | Status: INVESTIGATING", "refId": "B" }
+      ],
+      "title": "Dark Web Leak Detection (MOCK)",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 17 },
+      "options": { "showHeader": true },
+      "targets": [
+        { "expr": "vector(1)", "legendFormat": "Wallet: 0x71... | Score: 85/100 | Risk: HIGH", "refId": "A" },
+        { "expr": "vector(1)", "legendFormat": "Wallet: 0x42... | Score: 40/100 | Risk: LOW", "refId": "B" }
+      ],
+      "title": "Suspicious User Behavior Analytics (UBA)",
+      "type": "table"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["tfg", "ai", "intel"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "TFG - ADVANCED THREAT INTELLIGENCE & AI",
+  "uid": "tfg-ai-intel",
+  "version": 1
+}

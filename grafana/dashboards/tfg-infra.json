@@ -1,0 +1,121 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "row",
+      "title": "🏗️ GLOBAL INFRASTRUCTURE & PERFORMANCE",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "vector(45) + (time() % 15)", "refId": "A" }],
+      "title": "Core CPU Load",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "unit": "percent", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 85 }] } } }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "vector(2.1) + (time() % 2) / 4", "refId": "A" }],
+      "title": "Memory Footprint",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "unit": "decbytes", "color": { "mode": "fixed", "fixedColor": "blue" } } }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "vector(12) + (time() % 4)", "refId": "A" }],
+      "title": "Concurrent Sessions",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "vector(99.99)", "refId": "A" }],
+      "title": "Cluster Uptime",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "unit": "percent", "color": { "mode": "fixed", "fixedColor": "green" } } }
+    },
+    {
+      "type": "row",
+      "title": "🛡️ CYBERSECURITY POSTURE & COMPLIANCE",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 6 },
+      "options": { "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "vector(88)", "refId": "A" }],
+      "title": "ISO 27001 Compliance Score",
+      "type": "gauge",
+      "fieldConfig": { "defaults": { "min": 0, "max": 100, "unit": "percent", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 60 }, { "color": "green", "value": 85 }] } } }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 6 },
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "vector(3)", "refId": "A" }],
+      "title": "Open Vulnerabilities (Critical)",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "red" } } }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 6 },
+      "options": { "showHeader": true },
+      "targets": [
+        { "expr": "vector(1)", "legendFormat": "T1110: IP Whitelisting (Active)", "refId": "A" },
+        { "expr": "vector(1)", "legendFormat": "T1210: Contract Pause (Standby)", "refId": "B" },
+        { "expr": "vector(1)", "legendFormat": "T1190: SQL Sanitizer (Active)", "refId": "C" }
+      ],
+      "title": "Automated Response Playbooks",
+      "type": "table"
+    },
+    {
+      "type": "row",
+      "title": "🗺️ GLOBAL THREAT GEOGRAPHY",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 15 },
+      "options": { "legend": { "displayMode": "list", "placement": "right" } },
+      "targets": [
+        { "expr": "vector(45)", "legendFormat": "USA (Proxy/VPN)", "refId": "A" },
+        { "expr": "vector(30)", "legendFormat": "China (Scanner)", "refId": "B" },
+        { "expr": "vector(15)", "legendFormat": "Russia (Botnet)", "refId": "C" },
+        { "expr": "vector(10)", "legendFormat": "Other", "refId": "D" }
+      ],
+      "title": "Attack Origin by Region",
+      "type": "piechart"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 15 },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        { "expr": "vector(850) + (time() % 100)", "legendFormat": "Ingress Traffic (Kbps)", "refId": "A" },
+        { "expr": "vector(120) + (time() % 20)", "legendFormat": "Egress Traffic (Kbps)", "refId": "B" }
+      ],
+      "title": "Network Bandwidth Forensics",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["tfg", "infra", "ultimate"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "TFG - INFRA & CYBER POSTURE MASTER",
+  "uid": "tfg-infra-ultimate",
+  "version": 10
+}
